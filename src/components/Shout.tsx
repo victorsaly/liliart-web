@@ -7,14 +7,17 @@ import { Fragment } from 'react'
  *
  * The four colours cycle, so it works for any number of words.
  */
-export function Shout({ children }: { children: string }) {
+export function Shout({ children, quick = false }: { children: string; quick?: boolean }) {
   const words = children.trim().split(/\s+/)
+  /* A heading you meet once can take its time. A step title is an instruction
+     someone is waiting to read, so it lands inside 300ms however long it is. */
+  const per = quick ? 0.025 : 0.07
   return (
-    <span className="shout">
+    <span className={`shout ${quick ? 'is-quick' : ''}`}>
       {words.map((w, n) => (
         <Fragment key={`${n}-${w}`}>
           {n > 0 && ' '}
-          <span className={`w${n % 4}`} style={{ '--in': `${n * 0.07}s` } as React.CSSProperties}>
+          <span className={`w${n % 4}`} style={{ '--in': `${n * per}s` } as React.CSSProperties}>
             {w}
           </span>
         </Fragment>

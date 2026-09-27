@@ -93,7 +93,7 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
 
         <div className="make-num">{at + 1}</div>
         {/* keyed on the step so the words drop in again each time it changes */}
-        <h2 className="make-title" key={at}><Shout>{step.title}</Shout></h2>
+        <h2 className="make-title" key={at}><Shout quick>{step.title}</Shout></h2>
         <p className="make-text">{step.description}</p>
         {step.grownUp && (
           <span className="grownup"><GrownUpIcon /> A grown-up does this bit</span>
