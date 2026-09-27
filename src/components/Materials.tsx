@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Material } from '../lib/ai'
+import { CloseIcon, PlusIcon } from './icons'
 
 interface Props {
   items: Material[]
@@ -24,8 +25,8 @@ export function Materials({ items, onChange }: Props) {
 
   return (
     <div className="stickers">
-      {items.map((item) => (
-        <span className="sticker" key={item.name}>
+      {items.map((item, n) => (
+        <span className="sticker" key={item.name} style={{ '--n': n } as React.CSSProperties}>
           {item.name}
           {item.amount && <span className="sticker-amount">{item.amount}</span>}
           <button
@@ -33,7 +34,7 @@ export function Materials({ items, onChange }: Props) {
             aria-label={`Take ${item.name} off the table`}
             onClick={() => onChange(items.filter((i) => i.name !== item.name))}
           >
-            ×
+            <CloseIcon />
           </button>
         </span>
       ))}
@@ -45,7 +46,7 @@ export function Materials({ items, onChange }: Props) {
           aria-label="Add something it missed"
         />
         <button type="submit" className="sticker-plus" disabled={!typed.trim()} aria-label="Add">
-          +
+          <PlusIcon />
         </button>
       </form>
     </div>

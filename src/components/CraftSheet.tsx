@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Craft, Idea, Material, Mess } from '../lib/ai'
 import { explain, openCraft } from '../lib/ai'
 import * as saved from '../lib/saved'
+import { ArrowLeftIcon, ArrowRightIcon, GrownUpIcon, StarIcon } from './icons'
 
 const MESS: Record<Mess, string> = { low: 'Tidy', medium: 'A bit messy', high: 'Messy!' }
 
@@ -54,7 +55,7 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
   return (
     <div className="page">
       <button type="button" className="btn btn-small" onClick={onClose} style={{ marginBottom: '1rem' }}>
-        ← Back to ideas
+        <ArrowLeftIcon /> Back to ideas
       </button>
 
       <div className="sheet">
@@ -105,7 +106,7 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
                     <div>
                       <div className="step-title">{s.title}</div>
                       <div className="step-text">{s.description}</div>
-                      {s.grownUp && <span className="grownup">🧑 A grown-up does this bit</span>}
+                      {s.grownUp && <span className="grownup"><GrownUpIcon /> A grown-up does this bit</span>}
                     </div>
                   </li>
                 ))}
@@ -121,10 +122,10 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
 
             <div style={{ display: 'flex', gap: '.7rem' }}>
               <button type="button" className="btn" onClick={keep} aria-pressed={kept}>
-                {kept ? '★ Kept' : '☆ Keep it'}
+                <StarIcon filled={kept} /> {kept ? 'Kept' : 'Keep it'}
               </button>
               <button type="button" className="btn btn-go" style={{ flex: 1 }} onClick={() => onMake(craft)}>
-                Let's make it →
+                Let's make it <ArrowRightIcon />
               </button>
             </div>
           </>

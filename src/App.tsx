@@ -5,6 +5,7 @@ import { Ideas } from './components/Ideas'
 import { CraftSheet } from './components/CraftSheet'
 import { MakeScreen } from './components/MakeScreen'
 import { Kept } from './components/Kept'
+import { BookIcon, ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
 import { explain, findMaterials, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
 import './styles/make.css'
@@ -223,7 +224,7 @@ function Tabs({ tab, keptCount, onChange }: { tab: Tab; keptCount: number; onCha
         aria-current={tab === 'table' ? 'page' : undefined}
         onClick={() => onChange('table')}
       >
-        <span className="tab-icon" aria-hidden="true">✂️</span>
+        <span className="tab-icon"><ScissorsIcon /></span>
         <span>Table</span>
       </button>
       <button
@@ -231,13 +232,14 @@ function Tabs({ tab, keptCount, onChange }: { tab: Tab; keptCount: number; onCha
         aria-current={tab === 'kept' ? 'page' : undefined}
         onClick={() => onChange('kept')}
       >
-        <span className="tab-icon" aria-hidden="true">
-          ★{keptCount > 0 && <span className="tab-badge">{keptCount}</span>}
+        <span className="tab-icon">
+          <StarIcon filled={keptCount > 0} />
+          {keptCount > 0 && <span className="tab-badge">{keptCount}</span>}
         </span>
         <span>Kept</span>
       </button>
       <a className="tab" href="https://victorsaly.github.io/LilianaBlog/" target="_blank" rel="noopener noreferrer">
-        <span className="tab-icon" aria-hidden="true">📖</span>
+        <span className="tab-icon"><BookIcon /></span>
         <span>Lili's stories</span>
       </a>
     </nav>

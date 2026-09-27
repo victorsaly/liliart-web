@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { toDataUrl } from '../lib/photo'
+import { CameraIcon, PictureIcon } from './icons'
 
 interface Props {
   onPhoto: (full: string, small: string) => void
@@ -82,25 +83,5 @@ export function PhotoStep({ onPhoto, looking }: Props) {
         onChange={(e) => take(e.target.files?.[0])}
       />
     </div>
-  )
-}
-
-/* Material's photo-camera and image outlines, the two the MAUI app used. */
-function CameraIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.8l1.2-2h6.9l1.2 2h2.9A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" strokeLinejoin="round" />
-      <circle cx="12" cy="13" r="3.6" />
-    </svg>
-  )
-}
-
-function PictureIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <rect x="3.5" y="5" width="17" height="14" rx="1.8" />
-      <circle cx="9" cy="10" r="1.7" />
-      <path d="M5 17l4.2-4.4 3 3 2.6-2.4L19 17" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   )
 }
