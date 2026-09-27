@@ -147,3 +147,38 @@ export async function drawCraft(craft: Craft, materials: Material[]): Promise<st
     return null
   }
 }
+
+/**
+ * A picture of one step being done.
+ *
+ * Held for the session and no longer: six of these is a third of a megabyte,
+ * which is not something to put in local storage next to the crafts people
+ * actually want kept. Two callers asking for the same step share one request,
+ * because the screen asks for the step you are on and the one after it.
+ */
+const stepArt = new Map<string, Promise<string | null>>()
+
+export function drawStep(craft: Craft, n: number, materials: Material[]): Promise<string | null> {
+  const key = `${craft.id}:${n}`
+  const have = stepArt.get(key)
+  if (have) return have
+
+  const step = craft.steps[n]
+  if (!step) return Promise.resolve(null)
+
+  const wanted = post<{ image: string }>('/v1/ai/picture', {
+    kind: 'step',
+    of: craft.title,
+    what: `${step.title}. ${step.description}`,
+    materials,
+  })
+    .then((r) => r.image ?? null)
+    .catch(() => {
+      /* let it be asked for again later — a limit today is not a limit forever */
+      stepArt.delete(key)
+      return null
+    })
+
+  stepArt.set(key, wanted)
+  return wanted
+}

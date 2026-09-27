@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Craft } from '../lib/ai'
+import { drawStep, type Craft } from '../lib/ai'
 import { shrink, toDataUrl } from '../lib/photo'
 import * as saved from '../lib/saved'
+import { Shout } from './Shout'
 import { TakePhoto } from './TakePhoto'
 import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, GrownUpIcon, PictureIcon, RosetteIcon } from './icons'
 
@@ -20,8 +21,30 @@ interface Props {
 export function MakeScreen({ craft, onDone, onBack }: Props) {
   const [at, setAt] = useState(0)
   const [finished, setFinished] = useState(false)
+  const [art, setArt] = useState<Record<number, string>>({})
   const step = craft.steps[at]
   const last = at === craft.steps.length - 1
+
+  /*
+   * A picture of the step you are on, and quietly the one after it, so that
+   * tapping Next does not mean waiting. Nothing here is fetched for a step
+   * that is never reached: a craft abandoned at step two pays for three
+   * pictures, not for all of them. What the craft is made of comes from its
+   * own tool list, so this works for a kept craft reopened weeks later.
+   */
+  useEffect(() => {
+    let live = true
+    const stuff = craft.tools.map((t) => ({ name: t.tool }))
+    const fetchOne = (n: number) => {
+      if (n < 0 || n >= craft.steps.length) return
+      drawStep(craft, n, stuff).then((image) => {
+        if (live && image) setArt((a) => (a[n] ? a : { ...a, [n]: image }))
+      })
+    }
+    fetchOne(at)
+    fetchOne(at + 1)
+    return () => { live = false }
+  }, [at, craft])
 
   useEffect(() => {
     let lock: WakeLockSentinel | null = null
@@ -62,8 +85,15 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
       </div>
 
       <div className="make-body">
+        <figure className="make-art">
+          {art[at]
+            ? <img src={art[at]} alt={`Someone doing this step: ${step.title}`} />
+            : <div className="make-art-wait"><span /></div>}
+        </figure>
+
         <div className="make-num">{at + 1}</div>
-        <h2 className="make-title">{step.title}</h2>
+        {/* keyed on the step so the words drop in again each time it changes */}
+        <h2 className="make-title" key={at}><Shout>{step.title}</Shout></h2>
         <p className="make-text">{step.description}</p>
         {step.grownUp && (
           <span className="grownup"><GrownUpIcon /> A grown-up does this bit</span>
@@ -94,9 +124,8 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
  * The one celebration in the app, and it is earned: something that did not
  * exist half an hour ago now does. Ribbons are cut paper, which is what the
  * child has been handling.
- */
-/**
- * The end of a craft, which until now the app forgot the moment it happened.
+ *
+ * It is also the end the app used to forget the moment it happened.
  * Photographing the finished thing is what turns Kept from a list of ideas
  * you liked into a shelf of things you actually made — and it costs nothing,
  * because it never goes near the AI.

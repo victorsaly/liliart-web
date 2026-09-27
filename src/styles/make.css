@@ -114,10 +114,10 @@ img { max-width: 100%; }
   animation: wordIn .5s var(--ease) both;
   animation-delay: var(--in);
 }
-.shout .w0 { --tilt: -3deg; --in: 0s;    --tone: var(--magenta); }
-.shout .w1 { --tilt: 2deg;  --in: .08s;  --tone: var(--teal-ink); }
-.shout .w2 { --tilt: -2deg; --in: .16s;  --tone: var(--amber-ink); }
-.shout .w3 { --tilt: 3deg;  --in: .24s;  --tone: var(--pink); }
+.shout .w0 { --tilt: -3deg; --tone: var(--magenta); }
+.shout .w1 { --tilt: 2deg;  --tone: var(--teal-ink); }
+.shout .w2 { --tilt: -2deg; --tone: var(--amber-ink); }
+.shout .w3 { --tilt: 3deg;  --tone: var(--pink); }
 
 @keyframes wordIn {
   0%   { opacity: 0; transform: translateY(-16px) rotate(var(--tilt)) scale(.8); }
@@ -443,6 +443,19 @@ img { max-width: 100%; }
 .make-top .btn { border-color: #fff; color: #fff; background: transparent; }
 .make-count { font-weight: 800; }
 .make-body { flex: 1; overflow-y: auto; padding: 1.5rem 1.2rem; display: grid; align-content: start; gap: 1rem; max-width: 34rem; margin: 0 auto; width: 100%; }
+
+/* what this step looks like while someone is doing it */
+.make-art {
+  margin: 0 0 .2rem; width: 100%; overflow: hidden;
+  border: 5px solid var(--pink); border-radius: var(--r-lg);
+  background: var(--tint);
+}
+.make-art img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.make-art-wait { aspect-ratio: 4 / 3; display: grid; place-items: center; }
+.make-art-wait span {
+  width: 2.2rem; height: 2.2rem; border-radius: 8px;
+  background: var(--pink); animation: tumble 1.5s var(--ease) infinite;
+}
 .make-num {
   width: 3.4rem; height: 3.4rem; display: grid; place-items: center;
   border-radius: 50%; background: var(--magenta); color: #fff;

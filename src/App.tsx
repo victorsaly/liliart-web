@@ -6,6 +6,7 @@ import { CraftSheet } from './components/CraftSheet'
 import { MakeScreen } from './components/MakeScreen'
 import { Kept } from './components/Kept'
 import { HowItWorks, markSeenHow, seenHow } from './components/HowItWorks'
+import { Shout } from './components/Shout'
 import { BookIcon, ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
 import { explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
@@ -177,12 +178,7 @@ export default function App() {
           {tab === 'table' && (!photo ? (
             <>
               <section className="hero">
-                <h1 className="shout">
-                  <span className="w0">What</span>{' '}
-                  <span className="w1">can</span>{' '}
-                  <span className="w2">we</span>{' '}
-                  <span className="w3">make?</span>
-                </h1>
+                <h1><Shout>What can we make?</Shout></h1>
                 <p>Show it your bits and bobs, and it will think of things you can make.</p>
                 <button type="button" className="btn btn-small" onClick={() => setHow(true)}>
                   How it works

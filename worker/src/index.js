@@ -258,6 +258,28 @@ async function route(request, env, url) {
     if (!what) return json({ error: "nothing to draw" }, { status: 400 });
     const made = describe(materialList(body.materials, 12));
 
+    /*
+     * Two kinds of picture. "finished" is the thing you are aiming at, shown
+     * alone. "step" is one action being done — hands mid-job, the craft half
+     * built — because what a child needs while following step four is to see
+     * what step four looks like, not what the end looks like.
+     */
+    const isStep = body.kind === "step";
+    const of = str(body.of, 120);
+    const prompt = isStep
+      ? `A photograph of one step of making ${of || "a child's craft"} at a kitchen table: ${what}. ` +
+        (made ? `It is being made from ${made}. ` : "") +
+        "Show a pair of child's hands doing this one action, close up, on a plain pale table in soft " +
+        "daylight. The craft is part-built and handmade — wonky, visible tape and glue — because this " +
+        "is the middle of making it, not the end. Hands only, never a face. " +
+        "No text, no words, no letters, no numbers, no labels, no watermark."
+      : `A child's craft made at a kitchen table: ${what}. ` +
+        (made ? `Made from ${made}. ` : "") +
+        "Show only the finished object, sitting on a plain pale surface, photographed from " +
+        "slightly above in soft daylight. It should look handmade by a seven-year-old — " +
+        "a bit wonky, visible tape and glue, cut edges not quite straight — not a polished " +
+        "studio product. No people, no hands, no text, no labels, no watermark.";
+
     const response = await fetch(`${OPENAI}/images/generations`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
@@ -268,13 +290,7 @@ async function route(request, env, url) {
         n: 1,
         size: "1024x1024",
         quality: "low",
-        prompt:
-          `A child's craft made at a kitchen table: ${what}. ` +
-          (made ? `Made from ${made}. ` : "") +
-          "Show only the finished object, sitting on a plain pale surface, photographed from " +
-          "slightly above in soft daylight. It should look handmade by a seven-year-old — " +
-          "a bit wonky, visible tape and glue, cut edges not quite straight — not a polished " +
-          "studio product. No people, no hands, no text, no labels, no watermark.",
+        prompt,
       }),
     }).catch(() => null);
 
