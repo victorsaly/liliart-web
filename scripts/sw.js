@@ -25,6 +25,19 @@ const KEEP = [CORE, FONTS];
 /** The page itself, whatever path the app was opened at. */
 const INDEX = "/index.html";
 
+/*
+ * Match on the URL alone.
+ *
+ * A server that answers `Vary: Origin` (vite preview) or `Vary:
+ * Accept-Encoding` (GitHub Pages) makes the cache compare headers too, and
+ * install stored these with a plain fetch that carries neither. The request
+ * for a `crossorigin` module script does carry Origin, which is enough to
+ * miss every asset and open the app to a blank page — which is exactly what
+ * happened to FeedmeAI, on the same shape of worker and the same host. These
+ * files are content-hashed and immutable; there is nothing to vary by.
+ */
+const MATCH = { ignoreVary: true };
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -65,7 +78,7 @@ self.addEventListener("fetch", (event) => {
   if (isFont(url)) {
     event.respondWith(
       caches.open(FONTS).then(async (cache) => {
-        const hit = await cache.match(request);
+        const hit = await cache.match(request, MATCH);
         const live = fetch(request)
           .then((res) => {
             if (res.ok || res.type === "opaque") cache.put(request, res.clone());
@@ -91,7 +104,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(CORE).then((c) => c.put(INDEX, copy));
           return res;
         })
-        .catch(async () => (await caches.match(INDEX)) || Response.error())
+        .catch(async () => (await caches.match(INDEX, MATCH)) || Response.error())
     );
     return;
   }
@@ -102,7 +115,7 @@ self.addEventListener("fetch", (event) => {
    * always right. Anything missed is fetched and kept for next time.
    */
   event.respondWith(
-    caches.match(request).then(
+    caches.match(request, MATCH).then(
       (hit) =>
         hit ||
         fetch(request)
