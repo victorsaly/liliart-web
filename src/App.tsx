@@ -23,6 +23,28 @@ import './styles/make.css'
  * craft does not throw away the photo you just took.
  */
 
+/**
+ * Whether there is a network right now.
+ *
+ * Thinking of ideas needs one; everything already kept does not. Saying which
+ * is which beats letting someone photograph their table and then wait for an
+ * answer that was never coming.
+ */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const up = () => setOnline(true)
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
+  return online
+}
+
 type Tab = 'table' | 'kept'
 type IdeasState = 'idle' | 'thinking' | 'ready' | 'stale' | 'error'
 
@@ -38,6 +60,7 @@ export default function App() {
   const [open, setOpen] = useState<Idea | null>(null)
   const [making, setMaking] = useState<Craft | null>(null)
   const [how, setHow] = useState(() => !seenHow())
+  const online = useOnline()
   const run = useRef(0)
   /* the window no longer scrolls — main does, so that is what we rewind */
   const scroller = useRef<HTMLElement>(null)
@@ -184,7 +207,22 @@ export default function App() {
                   How it works
                 </button>
               </section>
-              <PhotoStep onPhoto={onPhoto} />
+
+              {online ? <PhotoStep onPhoto={onPhoto} /> : (
+                <div className="empty">
+                  <p>
+                    There is no internet just now, so it cannot think of anything new.
+                    {keptCount > 0
+                      ? ' The ones you kept are still here, though.'
+                      : ' Come back when the wifi is working.'}
+                  </p>
+                  {keptCount > 0 && (
+                    <button type="button" className="btn" onClick={() => { setTab('kept'); top() }}>
+                      <StarIcon filled /> See the {keptCount} you kept
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
