@@ -1,0 +1,14 @@
+name = "liliart-api"
+main = "src/index.js"
+compatibility_date = "2026-09-27"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "liliart"
+database_id = "5d033bf7-8156-4795-a9a6-a269dc92c863"
+
+[vars]
+ALLOWED_ORIGINS = "https://liliart.victorsaly.com,http://localhost:5173,http://localhost:5180,http://localhost:4173"
+
+# Secret (set once, never stored here):
+#   npx wrangler secret put OPENAI_API_KEY
