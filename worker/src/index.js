@@ -9,6 +9,7 @@
  *   POST /v1/ai/materials  a photo  -> what craft materials are in it
  *   POST /v1/ai/ideas      materials -> a few things a child could make
  *   POST /v1/ai/craft      one idea  -> tools, steps, how long it takes
+ *   POST /v1/ai/picture    a craft   -> a drawing of the finished thing
  *
  * Every call is metered per day, per signed-out address, so a passer-by who
  * finds the endpoint cannot run up the bill.
@@ -37,6 +38,23 @@ const DAILY = 60;
 
 const str = (v, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const strs = (v, max = 40) => (Array.isArray(v) ? v.map((x) => str(x, 120)).filter(Boolean).slice(0, max) : []);
+
+/**
+ * Materials arrive as {name, amount} now. How much of a thing there is changes
+ * what can be made from it — one tube is a rocket, six are a marble run — so
+ * the amount goes to the model rather than being dropped on the way.
+ */
+const materialList = (v, max = 40) => {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((m) => (typeof m === "string"
+      ? { name: str(m, 120), amount: "" }
+      : { name: str(m?.name, 120), amount: str(m?.amount, 60) }))
+    .filter((m) => m.name)
+    .slice(0, max);
+};
+const describe = (items) =>
+  items.map((m) => (m.amount ? `${m.name} (${m.amount})` : m.name)).join(", ");
 
 /**
  * The house rules for every answer. The audience is a child making something
@@ -135,8 +153,10 @@ async function route(request, env, url) {
                 text:
                   "What is in this photo that we could make something out of? Be specific — " +
                   '"cardboard tube", "blue bottle top", "brown paper bag" — and skip anything ' +
-                  "that is not really usable. Give each one a rough count in two or three words " +
-                  '("a few", "one big one", "a whole bag"). Lowercase names. ' +
+                  "that is not really usable. Count them: give a number when you can see one " +
+                  '("3", "6"), and only fall back to words when you truly cannot ("a handful", ' +
+                  '"half a roll", "a whole bag"). How many there are decides what can be built, ' +
+                  "so it is worth being careful. Lowercase names. " +
                   'Reply with JSON: {"materials":[{"name":"...","amount":"a few"}]}',
               },
               { type: "image_url", image_url: { url: image, detail: "low" } },
@@ -155,12 +175,15 @@ async function route(request, env, url) {
 
   /* ---------- 2. a few things we could make ---------- */
   if (pathname === "/v1/ai/ideas") {
-    const materials = strs(body.materials);
+    const materials = materialList(body.materials);
     if (!materials.length) return json({ error: "materials are required" }, { status: 400 });
     const { data, error } = await chatJSON(
       env,
       "You suggest craft ideas built from what someone already has.",
-      "We have: " + materials.join(", ") + ". " +
+      "We have: " + describe(materials) + ". " +
+        "The words in brackets are roughly how much of each thing there is, and they matter: " +
+        "one cardboard tube is a rocket, six are a marble run. Do not plan a craft that needs more " +
+        "of something than we have, and if a craft wants more, put that in \"alsoNeed\". " +
         "Suggest 4 different things we could make, using mostly these and at most one or two extras " +
         "that most homes already have (tape, glue, string, paper, felt tips). " +
         "Vary them: something quick, something that takes an afternoon, something that moves or plays, " +
@@ -179,11 +202,12 @@ async function route(request, env, url) {
     const title = str(body.title, 120);
     if (!title) return json({ error: "a title is required" }, { status: 400 });
     const blurb = str(body.blurb, 300);
-    const materials = strs(body.materials);
+    const materials = materialList(body.materials);
     const { data, error } = await chatJSON(
       env,
       "You write the instructions for one craft, for a child to follow with a grown-up.",
-      `We are making: ${title}. ${blurb}\nWe have: ${materials.join(", ") || "what is in the photo"}.\n` +
+      `We are making: ${title}. ${blurb}\nWe have: ${describe(materials) || "what is in the photo"}.\n` +
+        "The brackets say roughly how much of each thing there is; keep the steps within that.\n" +
         "Write it out so a seven-year-old can follow it. Each step is one action, in one or two short " +
         "sentences, and says what it should look like when that step is done. " +
         "Mark any step a grown-up should do with \"grownUp\": true. " +
@@ -205,6 +229,45 @@ async function route(request, env, url) {
       tips: strs(data.tips, 5),
       picture: str(data.picture, 300),
     });
+  }
+
+  /* ---------- 4. a picture of the finished thing ----------
+   * The MAUI app drew one of these for every idea. Here it is drawn once, for
+   * the craft actually opened, because each one is a real charge on the key. */
+  if (pathname === "/v1/ai/picture") {
+    const what = str(body.what, 300);
+    if (!what) return json({ error: "nothing to draw" }, { status: 400 });
+    const made = describe(materialList(body.materials, 12));
+
+    const response = await fetch(`${OPENAI}/images/generations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        /* the account has no dall-e models; gpt-image-1-mini at low quality is
+           the cheapest thing that still looks handmade */
+        model: "gpt-image-1-mini",
+        n: 1,
+        size: "1024x1024",
+        quality: "low",
+        prompt:
+          `A child's craft made at a kitchen table: ${what}. ` +
+          (made ? `Made from ${made}. ` : "") +
+          "Show only the finished object, sitting on a plain pale surface, photographed from " +
+          "slightly above in soft daylight. It should look handmade by a seven-year-old — " +
+          "a bit wonky, visible tape and glue, cut edges not quite straight — not a polished " +
+          "studio product. No people, no hands, no text, no labels, no watermark.",
+      }),
+    }).catch(() => null);
+
+    if (!response) return json({ error: "could not draw it" }, { status: 502 });
+    if (response.status === 429) return json({ error: "the drawing is busy — try again in a moment" }, { status: 429 });
+    if (!response.ok) return json({ error: "could not draw it" }, { status: 502 });
+    const data = await response.json().catch(() => null);
+    const made64 = data?.data?.[0]?.b64_json;
+    if (!made64) return json({ error: "could not draw it" }, { status: 502 });
+    /* these models answer in base64, not a URL — hand it over as a data URL so
+       the browser has nothing else to fetch */
+    return json({ image: `data:image/png;base64,${made64}` });
   }
 
   return json({ error: "not found" }, { status: 404 });

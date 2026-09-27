@@ -48,6 +48,8 @@ export interface Craft {
   picture: string
   /** the photo it came from, kept with a saved craft */
   photo?: string
+  /** a drawing of the finished thing, shrunk before it is kept */
+  drawing?: string
   savedAt?: string
 }
 
@@ -92,8 +94,8 @@ export async function findMaterials(dataUrl: string): Promise<Material[]> {
 }
 
 export async function suggestIdeas(materials: Material[]): Promise<Idea[]> {
-  const names = materials.map((m) => m.name)
-  const { ideas } = await post<{ ideas: Omit<Idea, 'id'>[] }>('/v1/ai/ideas', { materials: names })
+  /* name and amount both go: six tubes is a different craft from one */
+  const { ideas } = await post<{ ideas: Omit<Idea, 'id'>[] }>('/v1/ai/ideas', { materials })
   return (ideas ?? []).map((idea, n) => ({
     ...idea,
     id: `idea-${Date.now()}-${n}`,
@@ -105,7 +107,24 @@ export async function suggestIdeas(materials: Material[]): Promise<Idea[]> {
 }
 
 export async function openCraft(idea: Idea, materials: Material[]): Promise<Craft> {
-  const body = { title: idea.title, blurb: idea.blurb, materials: materials.map((m) => m.name) }
+  const body = { title: idea.title, blurb: idea.blurb, materials }
   const craft = await post<Omit<Craft, 'id' | 'title'>>('/v1/ai/craft', body)
   return { ...craft, id: idea.id, title: idea.title }
+}
+
+/**
+ * A drawing of the finished thing. One per craft that is actually opened, not
+ * one per idea: each of these is a real charge on the key.
+ */
+export async function drawCraft(craft: Craft, materials: Material[]): Promise<string | null> {
+  try {
+    const { image } = await post<{ image: string }>('/v1/ai/picture', {
+      what: craft.picture || `${craft.title}. ${craft.summary}`,
+      materials,
+    })
+    return image ?? null
+  } catch {
+    /* the craft is the point; a missing picture is not worth an error */
+    return null
+  }
 }

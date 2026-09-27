@@ -1,11 +1,27 @@
 import { useRef, useState } from 'react'
 import { toDataUrl } from '../lib/photo'
+import { Camera } from './Camera'
 import { CameraIcon, PictureIcon } from './icons'
 
 interface Props {
   onPhoto: (full: string, small: string) => void
   /** the photo currently being looked at, if any */
   looking?: string
+}
+
+/**
+ * Which camera TAKE should open.
+ *
+ * A phone's own camera app takes a better photo than `getUserMedia` does, and
+ * `capture="environment"` opens it — but only on a phone. On a laptop, Edge and
+ * every other desktop browser ignore the attribute and quietly open a file
+ * picker, so TAKE never turns a camera on. There we open one ourselves.
+ */
+function ownCameraIsBetter(): boolean {
+  if (typeof window === 'undefined') return false
+  if (!navigator.mediaDevices?.getUserMedia) return false
+  const touch = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches
+  return !touch
 }
 
 /**
@@ -17,6 +33,7 @@ export function PhotoStep({ onPhoto, looking }: Props) {
   const library = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const [problem, setProblem] = useState<string>()
+  const [shooting, setShooting] = useState(false)
 
   async function take(file?: File | null) {
     if (!file) return
@@ -31,6 +48,15 @@ export function PhotoStep({ onPhoto, looking }: Props) {
     } catch {
       setProblem("Couldn't open that picture. Try taking another one.")
     }
+  }
+
+  if (shooting) {
+    return (
+      <Camera
+        onClose={() => setShooting(false)}
+        onShot={(file) => { setShooting(false); take(file) }}
+      />
+    )
   }
 
   if (looking) {
@@ -59,7 +85,10 @@ export function PhotoStep({ onPhoto, looking }: Props) {
     >
       {/* TAKE and PICK, side by side and huge, as they are in the MAUI app */}
       <div className="big-pair">
-        <button type="button" className="big-btn" onClick={() => camera.current?.click()}>
+        <button
+          type="button" className="big-btn"
+          onClick={() => (ownCameraIsBetter() ? setShooting(true) : camera.current?.click())}
+        >
           <CameraIcon />
           <span>TAKE</span>
         </button>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Craft, Idea, Material, Mess } from '../lib/ai'
-import { explain, openCraft } from '../lib/ai'
+import { drawCraft, explain, openCraft } from '../lib/ai'
+import { shrink } from '../lib/photo'
 import * as saved from '../lib/saved'
 import { ArrowLeftIcon, ArrowRightIcon, GrownUpIcon, StarIcon } from './icons'
 
@@ -21,15 +22,26 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
   const [craft, setCraft] = useState<Craft | null>(null)
   const [problem, setProblem] = useState<string>()
   const [kept, setKept] = useState(false)
+  const [drawing, setDrawing] = useState<string | null>(null)
+  /* which craft we have already asked for a drawing of. A ref, not state:
+     as a dependency it would re-run this effect and cancel its own request. */
+  const asked = useRef<string | undefined>(undefined)
+  const latest = useRef(materials)
+  latest.current = materials
 
   useEffect(() => {
     if (!idea) { setCraft(null); setProblem(undefined); return }
     let live = true
     setCraft(null)
     setProblem(undefined)
+    setDrawing(null)
 
     const have = cache.get(idea.id)
-    if (have) { setCraft(have); setKept(saved.isSaved(have.id)); return }
+    if (have) {
+      setCraft(have)
+      setKept(saved.isSaved(have.id))
+      return
+    }
 
     openCraft(idea, materials)
       .then((c) => {
@@ -41,6 +53,28 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
       .catch((err) => live && setProblem(explain(err, "Couldn't write this one out. Close it and try again.")))
     return () => { live = false }
   }, [idea, materials])
+
+  /* the drawing follows the craft, once per craft, and never blocks reading it */
+  const craftId = craft?.id
+  useEffect(() => {
+    if (!craft || !craftId) return
+    if (craft.drawing) { setDrawing(craft.drawing); return }
+    if (asked.current === craftId) return
+    asked.current = craftId
+
+    let live = true
+    drawCraft(craft, latest.current).then(async (image) => {
+      if (!live || !image) return
+      const small = await shrink(image).catch(() => image)
+      setDrawing(small)
+      const withArt = { ...craft, drawing: small }
+      cache.set(craftId, withArt)
+      setCraft(withArt)
+    })
+    return () => { live = false }
+    /* keyed by id: setCraft below changes the object but not which craft it is */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [craftId])
 
   if (!idea) return null
 
@@ -77,6 +111,13 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
 
         {craft && (
           <>
+            <figure className="craft-art">
+              {drawing
+                ? <img src={drawing} alt={`A drawing of the finished ${craft.title}`} />
+                : <div className="craft-art-wait"><span /><p>Drawing what it might look like…</p></div>}
+              {drawing && <figcaption>Roughly how yours might turn out</figcaption>}
+            </figure>
+
             <p className="sheet-summary">{craft.summary}</p>
             <div className="idea-meta">
               <span className="chip chip-accent">{craft.minutes} min</span>
