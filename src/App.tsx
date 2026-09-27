@@ -208,7 +208,7 @@ function Header({ onHome }: { onHome: () => void }) {
   return (
     <header className="top">
       <button type="button" className="brand" onClick={onHome}>
-        <span aria-hidden="true">🎨</span>
+        <img src="/icon.svg" alt="" width="30" height="30" />
         <span>Lili<span className="brand-art">Art</span></span>
       </button>
     </header>
