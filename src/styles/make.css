@@ -23,8 +23,13 @@
   --edge: #b00b80;
   --hair: #f0d7e6;         /* magenta, most of the way to white */
 
+  /* Two more colours, so the app is not only pink. The bright pair are for
+     fills; the ink pair are the same hues dark enough to read as text on
+     white — #12b3a4 is 2.6:1 there and #f5a623 only 2.0:1. */
   --amber: #f5a623;
+  --amber-ink: #a8600a;
   --teal: #12b3a4;
+  --teal-ink: #0d7d72;
 
   --font: "Open Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
@@ -99,6 +104,27 @@ img { max-width: 100%; }
 .hero p { margin: .6rem 0 0; font-size: 1.02rem; line-height: 1.45; color: var(--ink-2); max-width: 32ch; }
 .hero .btn { margin-top: .9rem; }
 
+/* The one place the app shouts. Each word gets its own colour and its own
+   small tilt, and they drop in one after another — this is the first thing a
+   seven-year-old sees, and it should not look like a form. */
+.shout span {
+  display: inline-block;
+  color: var(--tone);
+  transform: rotate(var(--tilt));
+  animation: wordIn .5s var(--ease) both;
+  animation-delay: var(--in);
+}
+.shout .w0 { --tilt: -3deg; --in: 0s;    --tone: var(--magenta); }
+.shout .w1 { --tilt: 2deg;  --in: .08s;  --tone: var(--teal-ink); }
+.shout .w2 { --tilt: -2deg; --in: .16s;  --tone: var(--amber-ink); }
+.shout .w3 { --tilt: 3deg;  --in: .24s;  --tone: var(--pink); }
+
+@keyframes wordIn {
+  0%   { opacity: 0; transform: translateY(-16px) rotate(var(--tilt)) scale(.8); }
+  65%  { opacity: 1; transform: translateY(4px) rotate(var(--tilt)) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) rotate(var(--tilt)) scale(1); }
+}
+
 .label {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   margin: 1.6rem 0 .7rem;
@@ -142,6 +168,10 @@ img { max-width: 100%; }
 .big-btn:active { transform: scale(.97); }
 .big-btn.is-second { background: var(--pink); }
 .big-btn svg { width: 46px; height: 46px; display: block; }
+.big-btn img {
+  display: block; width: 100%; max-width: 6rem; aspect-ratio: 1;
+  object-fit: cover; border-radius: 12px;
+}
 .big-btn span {
   font-weight: 800; font-size: clamp(1.5rem, 7vw, 2rem); letter-spacing: .04em; line-height: 1;
 }
@@ -623,4 +653,5 @@ img { max-width: 100%; }
   .confetti { display: none; }
   .done-mark { animation: none; }
   .sticker { animation-delay: 0ms !important; }
+  .shout span { animation: none; }
 }

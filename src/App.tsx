@@ -177,8 +177,13 @@ export default function App() {
           {tab === 'table' && (!photo ? (
             <>
               <section className="hero">
-                <h1>What can we make?</h1>
-                <p>Photograph the odds and ends you have, and it will think of things to make with them.</p>
+                <h1 className="shout">
+                  <span className="w0">What</span>{' '}
+                  <span className="w1">can</span>{' '}
+                  <span className="w2">we</span>{' '}
+                  <span className="w3">make?</span>
+                </h1>
+                <p>Show it your bits and bobs, and it will think of things you can make.</p>
                 <button type="button" className="btn btn-small" onClick={() => setHow(true)}>
                   How it works
                 </button>

@@ -31,11 +31,17 @@ export const PictureIcon = (p: Props) => (
   </svg>
 )
 
+/*
+ * Two handles, two blades, one pivot. The old one had a third stroke running
+ * off to the right — a blade that no pair of scissors has.
+ */
 export const ScissorsIcon = (p: Props) => (
   <svg {...base} {...p}>
-    <circle cx="6.5" cy="18" r="2.6" />
-    <circle cx="6.5" cy="6" r="2.6" />
-    <path d="M8.8 16.7 20 5.4M8.8 7.3 20 18.6M12.4 11.6 20 12" />
+    <circle cx="6.2" cy="18.6" r="2.5" />
+    <circle cx="17.8" cy="18.6" r="2.5" />
+    <path d="M8.1 17 17.1 4.2" />
+    <path d="M15.9 17 6.9 4.2" />
+    <circle cx="12" cy="10.6" r="1.05" />
   </svg>
 )
 

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { toDataUrl } from '../lib/photo'
 import { TakePhoto } from './TakePhoto'
-import { CameraIcon, PictureIcon } from './icons'
 
 interface Props {
   onPhoto: (full: string, small: string) => void
@@ -58,12 +57,13 @@ export function PhotoStep({ onPhoto, looking }: Props) {
     >
       {/* TAKE and PICK, side by side and huge, as they are in the MAUI app */}
       <div className="big-pair">
+        {/* the pictures say what each one does faster than an icon can */}
         <TakePhoto source="camera" className="big-btn" onPhoto={take}>
-          <CameraIcon />
+          <img src="/how/take.jpg" alt="" width="96" height="96" />
           <span>TAKE</span>
         </TakePhoto>
         <TakePhoto source="library" className="big-btn is-second" onPhoto={take}>
-          <PictureIcon />
+          <img src="/how/pick.jpg" alt="" width="96" height="96" />
           <span>PICK</span>
         </TakePhoto>
       </div>
