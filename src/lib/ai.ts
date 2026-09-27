@@ -50,6 +50,9 @@ export interface Craft {
   photo?: string
   /** a drawing of the finished thing, shrunk before it is kept */
   drawing?: string
+  /** a photo of the one you actually made, taken when you finished it */
+  made?: string
+  madeAt?: string
   savedAt?: string
 }
 

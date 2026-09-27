@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { toDataUrl } from '../lib/photo'
-import { Camera } from './Camera'
+import { TakePhoto } from './TakePhoto'
 import { CameraIcon, PictureIcon } from './icons'
 
 interface Props {
@@ -10,30 +10,12 @@ interface Props {
 }
 
 /**
- * Which camera TAKE should open.
- *
- * A phone's own camera app takes a better photo than `getUserMedia` does, and
- * `capture="environment"` opens it — but only on a phone. On a laptop, Edge and
- * every other desktop browser ignore the attribute and quietly open a file
- * picker, so TAKE never turns a camera on. There we open one ourselves.
- */
-function ownCameraIsBetter(): boolean {
-  if (typeof window === 'undefined') return false
-  if (!navigator.mediaDevices?.getUserMedia) return false
-  const touch = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches
-  return !touch
-}
-
-/**
  * The table: put something on it. Camera on a phone, file picker anywhere,
  * and a drop target on a desktop — all three land in the same place.
  */
 export function PhotoStep({ onPhoto, looking }: Props) {
-  const camera = useRef<HTMLInputElement>(null)
-  const library = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const [problem, setProblem] = useState<string>()
-  const [shooting, setShooting] = useState(false)
 
   async function take(file?: File | null) {
     if (!file) return
@@ -48,15 +30,6 @@ export function PhotoStep({ onPhoto, looking }: Props) {
     } catch {
       setProblem("Couldn't open that picture. Try taking another one.")
     }
-  }
-
-  if (shooting) {
-    return (
-      <Camera
-        onClose={() => setShooting(false)}
-        onShot={(file) => { setShooting(false); take(file) }}
-      />
-    )
   }
 
   if (looking) {
@@ -85,32 +58,20 @@ export function PhotoStep({ onPhoto, looking }: Props) {
     >
       {/* TAKE and PICK, side by side and huge, as they are in the MAUI app */}
       <div className="big-pair">
-        <button
-          type="button" className="big-btn"
-          onClick={() => (ownCameraIsBetter() ? setShooting(true) : camera.current?.click())}
-        >
+        <TakePhoto source="camera" className="big-btn" onPhoto={take}>
           <CameraIcon />
           <span>TAKE</span>
-        </button>
-        <button type="button" className="big-btn is-second" onClick={() => library.current?.click()}>
+        </TakePhoto>
+        <TakePhoto source="library" className="big-btn is-second" onPhoto={take}>
           <PictureIcon />
           <span>PICK</span>
-        </button>
+        </TakePhoto>
       </div>
       <p className="table-hint">
         Put your bits and bobs on the table and photograph them — boxes, tubes, lids, scraps,
         odd socks. The more it can see, the better the ideas.
       </p>
       {problem && <p className="note err" style={{ marginTop: '.9rem' }}>{problem}</p>}
-
-      <input
-        ref={camera} type="file" accept="image/*" capture="environment" hidden
-        onChange={(e) => take(e.target.files?.[0])}
-      />
-      <input
-        ref={library} type="file" accept="image/*" hidden
-        onChange={(e) => take(e.target.files?.[0])}
-      />
     </div>
   )
 }

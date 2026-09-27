@@ -66,6 +66,25 @@ export const PlusIcon = (p: Props) => (
   <svg {...base} {...p}><path d="M12 5.5v13M5.5 12h13" /></svg>
 )
 
+/** the odds and ends themselves: a box, a tube and a lid, sat on the table */
+export const BitsIcon = (p: Props) => (
+  <svg {...base} {...p}>
+    <path d="M2.8 20.6h18.4" />
+    <rect x="3.4" y="13.2" width="6.6" height="7.4" rx="1.2" />
+    <rect x="11.6" y="9" width="4.4" height="11.6" rx="2.2" />
+    <circle cx="19" cy="17.2" r="3.4" />
+  </svg>
+)
+
+/** an idea: a bulb, with the little rays coming off it */
+export const BulbIcon = (p: Props) => (
+  <svg {...base} {...p}>
+    <path d="M9.6 15.4a5 5 0 1 1 4.8 0v1.3a1.2 1.2 0 0 1-1.2 1.2h-2.4a1.2 1.2 0 0 1-1.2-1.2z" />
+    <path d="M10.4 19.6h3.2" />
+    <path d="M12 1.8v1.6M4.3 5.1l1.1 1.1M19.7 5.1l-1.1 1.1M2.4 12.4H4M20 12.4h1.6" />
+  </svg>
+)
+
 export const BinIcon = (p: Props) => (
   <svg {...base} {...p}>
     <path d="M4.5 6.5h15M9.5 6.5V4.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.7" />

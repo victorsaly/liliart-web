@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Craft } from '../lib/ai'
-import { ArrowLeftIcon, ArrowRightIcon, GrownUpIcon, RosetteIcon } from './icons'
+import { shrink, toDataUrl } from '../lib/photo'
+import * as saved from '../lib/saved'
+import { TakePhoto } from './TakePhoto'
+import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, GrownUpIcon, PictureIcon, RosetteIcon } from './icons'
 
 interface Props {
   craft: Craft
@@ -92,11 +95,38 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
  * exist half an hour ago now does. Ribbons are cut paper, which is what the
  * child has been handling.
  */
+/**
+ * The end of a craft, which until now the app forgot the moment it happened.
+ * Photographing the finished thing is what turns Kept from a list of ideas
+ * you liked into a shelf of things you actually made — and it costs nothing,
+ * because it never goes near the AI.
+ */
 function Finished({ craft, onDone }: { craft: Craft; onDone: () => void }) {
+  const [made, setMade] = useState(craft.made)
+  const [problem, setProblem] = useState<string>()
   const ribbons = Array.from({ length: 18 }, (_, n) => ({
     left: `${(n * 5.6 + (n % 4) * 3) % 96}%`,
     delay: `${(n % 6) * 0.14}s`,
   }))
+
+  async function show(file: File) {
+    if (!file.type.startsWith('image/')) {
+      setProblem('That is not a picture. Try a photo of what you made.')
+      return
+    }
+    setProblem(undefined)
+    try {
+      const { full } = await toDataUrl(file)
+      const small = await shrink(full, 720, 0.82)
+      setMade(small)
+      /* it is kept from here on whether it was before or not: you made it */
+      if (!saved.recordMade(craft, small)) {
+        setProblem('Saved, but there was not room for everything.')
+      }
+    } catch {
+      setProblem("Couldn't open that picture. Have another go.")
+    }
+  }
 
   return (
     <div className="done">
@@ -106,10 +136,38 @@ function Finished({ craft, onDone }: { craft: Craft; onDone: () => void }) {
         ))}
       </div>
       <div className="done-in">
-        <div className="done-mark"><RosetteIcon /></div>
+        {made ? (
+          <figure className="made">
+            <img src={made} alt={`The ${craft.title} you made`} />
+            <figcaption>Yours</figcaption>
+          </figure>
+        ) : (
+          <div className="done-mark"><RosetteIcon /></div>
+        )}
+
         <h2>You made it!</h2>
-        <p>{craft.title} is finished. Show someone, then find something else to make.</p>
-        <button type="button" className="btn btn-go btn-big" onClick={onDone}>
+        <p>
+          {made
+            ? `${craft.title} is on your shelf now. Show someone.`
+            : `${craft.title} is finished. Take a photo of it and it will be waiting in Kept.`}
+        </p>
+
+        {problem && <p className="note err">{problem}</p>}
+
+        {!made && (
+          <div className="done-do">
+            <TakePhoto source="camera" className="btn btn-go btn-big" onPhoto={show}>
+              <CameraIcon /> Show what you made
+            </TakePhoto>
+            <TakePhoto source="library" className="btn btn-small" onPhoto={show}>
+              <PictureIcon /> Pick a photo
+            </TakePhoto>
+          </div>
+        )}
+
+        <button
+          type="button" className={`btn btn-big ${made ? 'btn-go' : ''}`} onClick={onDone}
+        >
           Make something else
         </button>
       </div>

@@ -78,6 +78,9 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
 
   if (!idea) return null
 
+  /* if this one has been made before, the photo of it lives with the saved copy */
+  const made = saved.find(idea.id)?.made
+
   function keep() {
     if (!craft) return
     if (kept) { saved.remove(craft.id); setKept(false); return }
@@ -111,12 +114,21 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
 
         {craft && (
           <>
-            <figure className="craft-art">
-              {drawing
-                ? <img src={drawing} alt={`A drawing of the finished ${craft.title}`} />
-                : <div className="craft-art-wait"><span /><p>Drawing what it might look like…</p></div>}
-              {drawing && <figcaption>Roughly how yours might turn out</figcaption>}
-            </figure>
+            {/* once you have made one, the two sit together: the idea, and yours */}
+            <div className={`craft-arts ${made ? 'is-pair' : ''}`}>
+              <figure className="craft-art">
+                {drawing
+                  ? <img src={drawing} alt={`A drawing of the finished ${craft.title}`} />
+                  : <div className="craft-art-wait"><span /><p>Drawing what it might look like…</p></div>}
+                <figcaption>{made ? 'The idea' : 'Roughly how yours might turn out'}</figcaption>
+              </figure>
+              {made && (
+                <figure className="craft-art is-yours">
+                  <img src={made} alt={`The ${craft.title} you made`} />
+                  <figcaption>Yours</figcaption>
+                </figure>
+              )}
+            </div>
 
             <p className="sheet-summary">{craft.summary}</p>
             <div className="idea-meta">

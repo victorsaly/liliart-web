@@ -50,15 +50,38 @@ export function all(): Craft[] {
 export const count = (): number => all().length
 export const isSaved = (id: string): boolean => read().some((c) => c.id === id)
 
+export const find = (id: string): Craft | undefined => read().find((c) => c.id === id)
+
 export function save(craft: Craft): boolean {
   const list = read().filter((c) => c.id !== craft.id)
   const entry = { ...craft, savedAt: new Date().toISOString() }
-  if (write([entry, ...list])) return notify(true)
-  /* out of room: keep the craft, lose the picture */
-  if (write([{ ...entry, photo: undefined }, ...list])) return notify(true)
-  /* still no room: drop the oldest photo we are holding and try once more */
-  const slimmer = list.map((c, i) => (i === list.length - 1 ? { ...c, photo: undefined } : c))
-  return notify(write([{ ...entry, photo: undefined }, ...slimmer]))
+
+  /*
+   * Pictures are what fills the quota, so give them up in the order we can
+   * best afford to: first the photo of the table, then the drawing of what it
+   * might look like. The photo of the one actually made is never dropped —
+   * it is the only thing here that cannot be made again.
+   */
+  const shrinking = [
+    entry,
+    { ...entry, photo: undefined },
+    { ...entry, photo: undefined, drawing: undefined },
+  ]
+  for (const attempt of shrinking) {
+    if (write([attempt, ...list])) return notify(true)
+  }
+  /* still no room: ask the older ones for their pictures too */
+  const lean = list.map((c) => ({ ...c, photo: undefined, drawing: undefined }))
+  return notify(write([{ ...entry, photo: undefined, drawing: undefined }, ...lean]))
+}
+
+/**
+ * Record that this one got made, keeping it if it was not kept already.
+ * Merged onto whatever is stored, so finishing a craft opened from the ideas
+ * list does not throw away the table photo a kept copy was holding.
+ */
+export function recordMade(craft: Craft, made: string): boolean {
+  return save({ ...find(craft.id), ...craft, made, madeAt: new Date().toISOString() })
 }
 
 export function remove(id: string): boolean {

@@ -52,12 +52,17 @@ export function Kept({ crafts, onOpen }: Props) {
             left={{ label: 'Remove', tone: 'bin', icon: <BinIcon />, run: () => drop(craft) }}
             right={{ label: 'Make it', tone: 'go', icon: <ArrowRightIcon />, run: () => onOpen(craft) }}
           >
-            <div className="idea">
+            <div className={`idea ${craft.made ? 'is-made' : ''}`}>
               <button type="button" className="idea-body" onClick={() => onOpen(craft)}>
+                {craft.made && (
+                  <img className="made-thumb" src={craft.made} alt={`The ${craft.title} you made`} />
+                )}
                 <span className="idea-title">{craft.title}</span>
                 <span className="idea-blurb">{craft.summary}</span>
                 <span className="idea-meta">
-                  <span className="chip chip-accent">{craft.minutes} min</span>
+                  {craft.made
+                    ? <span className="chip chip-accent">You made this</span>
+                    : <span className="chip chip-accent">{craft.minutes} min</span>}
                   <span className="chip">{craft.steps.length} steps</span>
                 </span>
               </button>

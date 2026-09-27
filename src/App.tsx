@@ -5,6 +5,7 @@ import { Ideas } from './components/Ideas'
 import { CraftSheet } from './components/CraftSheet'
 import { MakeScreen } from './components/MakeScreen'
 import { Kept } from './components/Kept'
+import { HowItWorks, markSeenHow, seenHow } from './components/HowItWorks'
 import { BookIcon, ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
 import { explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
@@ -35,6 +36,7 @@ export default function App() {
   const [problem, setProblem] = useState<string>()
   const [open, setOpen] = useState<Idea | null>(null)
   const [making, setMaking] = useState<Craft | null>(null)
+  const [how, setHow] = useState(() => !seenHow())
   const run = useRef(0)
   /* the window no longer scrolls — main does, so that is what we rewind */
   const scroller = useRef<HTMLElement>(null)
@@ -134,6 +136,10 @@ export default function App() {
     document.title = making ? `${making.title} — LiliArt` : 'LiliArt'
   }, [making])
 
+  if (how) {
+    return <HowItWorks onClose={() => { markSeenHow(); setHow(false) }} />
+  }
+
   if (making) {
     return (
       <MakeScreen
@@ -173,6 +179,9 @@ export default function App() {
               <section className="hero">
                 <h1>What can we make?</h1>
                 <p>Photograph the odds and ends you have, and it will think of things to make with them.</p>
+                <button type="button" className="btn btn-small" onClick={() => setHow(true)}>
+                  How it works
+                </button>
               </section>
               <PhotoStep onPhoto={onPhoto} />
             </>
@@ -227,7 +236,7 @@ export default function App() {
             <>
               <section className="hero">
                 <h1>Kept</h1>
-                <p>The ones you liked. These stay on this device and work without the internet.</p>
+                <p>The ones you liked and the ones you made. These stay on this device and work without the internet.</p>
               </section>
               <Kept crafts={kept} onOpen={(craft) => setMaking(craft)} />
             </>
