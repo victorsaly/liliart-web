@@ -7,7 +7,7 @@ import { MakeScreen } from './components/MakeScreen'
 import { Kept } from './components/Kept'
 import { BookIcon, ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
-import { explain, findMaterials, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
+import { explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
 import './styles/make.css'
 
 /*
@@ -36,6 +36,9 @@ export default function App() {
   const [open, setOpen] = useState<Idea | null>(null)
   const [making, setMaking] = useState<Craft | null>(null)
   const run = useRef(0)
+  /* the window no longer scrolls — main does, so that is what we rewind */
+  const scroller = useRef<HTMLElement>(null)
+  const top = () => scroller.current?.scrollTo({ top: 0 })
 
   const kept = useSyncExternalStore(saved.subscribe, saved.all, () => [])
   const keptCount = useSyncExternalStore(saved.subscribe, saved.count, () => 0)
@@ -83,6 +86,32 @@ export default function App() {
     }
   }
 
+  /**
+   * Keep an idea straight off the list. The steps have to be written out
+   * before there is anything to save, so this can take a moment — the card
+   * says "Keeping…" while it does, and the sheet reuses the same write-up.
+   */
+  const [keeping, setKeeping] = useState<Set<string>>(new Set())
+  const keptIds = new Set(kept.map((c) => c.id))
+
+  async function keepIdea(idea: Idea) {
+    if (keptIds.has(idea.id)) { saved.remove(idea.id); return }
+    if (keeping.has(idea.id)) return
+    setKeeping((s) => new Set(s).add(idea.id))
+    try {
+      const craft = await openCraftOnce(idea, materials)
+      if (!saved.save({ ...craft, photo })) setProblem('Kept, but there was no room for the photo.')
+    } catch (err) {
+      setProblem(explain(err, "Couldn't keep that one. Try again in a moment."))
+    } finally {
+      setKeeping((s) => { const n = new Set(s); n.delete(idea.id); return n })
+    }
+  }
+
+  function hideIdea(idea: Idea) {
+    setIdeas((list) => list.filter((i) => i.id !== idea.id))
+  }
+
   function editMaterials(next: Material[]) {
     setMaterials(next)
     /* the ideas were for the old list — say so rather than quietly lying */
@@ -98,7 +127,7 @@ export default function App() {
     setIdeas([])
     setIdeasState('idle')
     setProblem(undefined)
-    window.scrollTo({ top: 0 })
+    top()
   }
 
   useEffect(() => {
@@ -137,70 +166,76 @@ export default function App() {
     <div className="app">
       <Header onHome={() => { startOver(); setTab('table') }} />
 
-      <main className="page">
-        {tab === 'table' && (!photo ? (
-          <>
-            <section className="hero">
-              <h1>What can we make?</h1>
-              <p>Photograph the odds and ends you have, and it will think of things to make with them.</p>
-            </section>
-            <PhotoStep onPhoto={onPhoto} />
-          </>
-        ) : (
-          <>
-            <div className="label" style={{ marginTop: 0 }}>
-              <span>On the table</span>
-              <button type="button" className="btn btn-small" onClick={startOver}>New photo</button>
-            </div>
+      <main ref={scroller}>
+        <div className="page">
+          {tab === 'table' && (!photo ? (
+            <>
+              <section className="hero">
+                <h1>What can we make?</h1>
+                <p>Photograph the odds and ends you have, and it will think of things to make with them.</p>
+              </section>
+              <PhotoStep onPhoto={onPhoto} />
+            </>
+          ) : (
+            <>
+              <div className="label" style={{ marginTop: 0 }}>
+                <span>On the table</span>
+                <button type="button" className="btn btn-small" onClick={startOver}>New photo</button>
+              </div>
 
-            <PhotoStep onPhoto={onPhoto} looking={looking} />
+              <PhotoStep onPhoto={onPhoto} looking={looking} />
 
-            {!looking && (
-              <>
-                {problem && <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>}
+              {!looking && (
+                <>
+                  {problem && <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>}
 
-                {materials.length > 0 && (
-                  <>
-                    <p className="label">
-                      <span>{materials.length} thing{materials.length === 1 ? '' : 's'} it spotted</span>
-                    </p>
-                    <Materials items={materials} onChange={editMaterials} />
-                  </>
-                )}
+                  {materials.length > 0 && (
+                    <>
+                      <p className="label">
+                        <span>{materials.length} thing{materials.length === 1 ? '' : 's'} it spotted</span>
+                      </p>
+                      <Materials items={materials} onChange={editMaterials} />
+                    </>
+                  )}
 
-                {ideasState === 'stale' && (
-                  <button
-                    type="button" className="btn btn-big" style={{ marginTop: '1rem' }}
-                    onClick={() => think(materials)}
-                  >
-                    Think again with this list
-                  </button>
-                )}
+                  {ideasState === 'stale' && (
+                    <button
+                      type="button" className="btn btn-big" style={{ marginTop: '1rem' }}
+                      onClick={() => think(materials)}
+                    >
+                      Think again with this list
+                    </button>
+                  )}
 
-                <Ideas
-                  ideas={ideas}
-                  state={ideasState}
-                  error={ideasError}
-                  onOpen={setOpen}
-                  onAgain={() => think(materials)}
-                />
-              </>
-            )}
-          </>
-        ))}
+                  <Ideas
+                    ideas={ideas}
+                    state={ideasState}
+                    error={ideasError}
+                    onOpen={setOpen}
+                    onAgain={() => think(materials)}
+                    onKeep={keepIdea}
+                    onHide={hideIdea}
+                    keptIds={keptIds}
+                    keeping={keeping}
+                  />
+                </>
+              )}
+            </>
+          ))}
 
-        {tab === 'kept' && (
-          <>
-            <section className="hero">
-              <h1>Kept</h1>
-              <p>The ones you liked. These stay on this device and work without the internet.</p>
-            </section>
-            <Kept crafts={kept} onOpen={(craft) => setMaking(craft)} />
-          </>
-        )}
+          {tab === 'kept' && (
+            <>
+              <section className="hero">
+                <h1>Kept</h1>
+                <p>The ones you liked. These stay on this device and work without the internet.</p>
+              </section>
+              <Kept crafts={kept} onOpen={(craft) => setMaking(craft)} />
+            </>
+          )}
+        </div>
       </main>
 
-      <Tabs tab={tab} keptCount={keptCount} onChange={setTab} />
+      <Tabs tab={tab} keptCount={keptCount} onChange={(t) => { setTab(t); top() }} />
     </div>
   )
 }

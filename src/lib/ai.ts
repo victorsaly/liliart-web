@@ -113,6 +113,22 @@ export async function openCraft(idea: Idea, materials: Material[]): Promise<Craf
 }
 
 /**
+ * Written out once per idea and held for the session, so keeping one from the
+ * list and then opening it does not pay for the same craft twice.
+ */
+const sheets = new Map<string, Craft>()
+
+export async function openCraftOnce(idea: Idea, materials: Material[]): Promise<Craft> {
+  const have = sheets.get(idea.id)
+  if (have) return have
+  const craft = await openCraft(idea, materials)
+  sheets.set(idea.id, craft)
+  return craft
+}
+
+export const rememberCraft = (craft: Craft): void => { sheets.set(craft.id, craft) }
+
+/**
  * A drawing of the finished thing. One per craft that is actually opened, not
  * one per idea: each of these is a real charge on the key.
  */

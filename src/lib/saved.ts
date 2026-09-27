@@ -65,6 +65,15 @@ export function remove(id: string): boolean {
   return notify(write(read().filter((c) => c.id !== id)))
 }
 
+/**
+ * Put one back exactly as it was, keeping its original `savedAt` so an undone
+ * removal lands where it was in the list rather than jumping to the top.
+ */
+export function restore(craft: Craft): boolean {
+  const list = read().filter((c) => c.id !== craft.id)
+  return notify(write([craft, ...list]))
+}
+
 function notify(ok: boolean): boolean {
   snapshot = null
   window.dispatchEvent(new Event(EVENT))

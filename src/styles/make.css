@@ -36,9 +36,17 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { min-height: 100%; }
+html, body, #root { height: 100%; }
 body {
   margin: 0;
+  /*
+   * The page itself does not scroll — `main` does. On iPhone a bar fixed to
+   * the bottom of the document is pinned to the layout viewport, so bouncing
+   * past the end slides the visible screen out from under it and the tabs
+   * appear to carry on down. A shell that cannot scroll cannot do that.
+   */
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font);
@@ -51,10 +59,17 @@ img { max-width: 100%; }
 
 /* ---------- shell ---------- */
 
-.app { min-height: 100dvh; display: flex; flex-direction: column; }
+.app { height: 100%; display: flex; flex-direction: column; }
+
+/* the one scrolling region: everything between the header and the tabs */
+.app > main {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 
 .top {
-  position: sticky; top: 0; z-index: 20;
+  flex: none; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: .75rem;
   padding: env(safe-area-inset-top, 0px) 1rem 0;
   min-height: calc(58px + env(safe-area-inset-top, 0px));
@@ -69,8 +84,8 @@ img { max-width: 100%; }
 .brand-art { color: #ffd6ec; }
 
 .page {
-  width: 100%; max-width: 40rem; margin: 0 auto; flex: 1;
-  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(6rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left));
+  width: 100%; max-width: 40rem; margin: 0 auto;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left));
 }
 
 /* ---------- headings ---------- */
@@ -217,16 +232,73 @@ img { max-width: 100%; }
 
 .ideas { display: grid; gap: .8rem; }
 .idea {
-  width: 100%; text-align: left;
-  border: 0; border-radius: var(--r-lg);
+  border-radius: var(--r-lg);
   background: var(--card); box-shadow: var(--lift);
   padding: .95rem 1rem;
-  display: grid; gap: .3rem;
-  transition: transform .1s var(--ease), border-color .15s ease;
+  display: grid; gap: .55rem;
   animation: pop .34s var(--ease) both;
+  transition: box-shadow .15s ease;
 }
-.idea:active { transform: scale(.985); }
-.idea:focus-visible { outline: 3px solid var(--magenta); outline-offset: 3px; }
+.idea.is-kept { box-shadow: inset 0 0 0 3px var(--pink), var(--lift); }
+
+/* the card body is the tap target; the keep button sits beside it */
+.idea-body {
+  width: 100%; text-align: left; padding: 0;
+  display: grid; gap: .3rem;
+  transition: transform .1s var(--ease);
+}
+.idea-body:active { transform: scale(.99); }
+.idea-body:focus-visible { outline: 3px solid var(--magenta); outline-offset: 4px; border-radius: 6px; }
+
+.keep {
+  justify-self: end;
+  display: inline-flex; align-items: center; gap: .4rem;
+  min-height: 40px; padding: 0 .95rem;
+  border: 2px solid var(--pink); border-radius: 999px;
+  background: var(--tint); color: #8c0a66;
+  font-weight: 800; font-size: .88rem;
+  transition: transform .1s var(--ease), background-color .15s ease;
+}
+.keep svg { width: 18px; height: 18px; }
+.keep:active { transform: scale(.96); }
+.keep.is-on { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+.keep.is-bin { border-color: var(--hair); background: var(--card); color: var(--ink-2); }
+.keep:disabled { opacity: .6; pointer-events: none; }
+
+/* ---------- slide a card to act on it ---------- */
+
+.swipe { position: relative; border-radius: var(--r-lg); overflow-x: clip; }
+/* pan-y hands the browser vertical scrolling and leaves us the sideways drag */
+.swipe-top { position: relative; z-index: 1; touch-action: pan-y; }
+/* icon over label, so the whole action fits in the strip the card uncovers */
+.swipe-tray {
+  position: absolute; inset: 0; z-index: 0;
+  display: flex; align-items: center; gap: .25rem;
+  flex-direction: column; justify-content: center;
+  padding: 0 1rem; border-radius: var(--r-lg);
+  color: #fff; font-weight: 800; font-size: .74rem;
+  letter-spacing: .02em; text-transform: uppercase;
+}
+.swipe-tray.is-left { align-items: flex-start; }
+.swipe-tray.is-right { align-items: flex-end; }
+.swipe-tray.tone-go { background: var(--magenta); }
+.swipe-tray.tone-bin { background: #6b3f57; }
+.swipe-tray svg { width: 24px; height: 24px; transition: transform .15s var(--ease); }
+.swipe-tray.is-armed svg { transform: scale(1.28); }
+
+.swipe-hint { margin: .1rem 0 .7rem; font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+/* a mouse has the buttons, so the hint would only be noise */
+@media (pointer: fine) { .swipe-hint { display: none; } }
+
+.undo {
+  position: sticky; bottom: .6rem; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  margin-top: 1rem; padding: .7rem .7rem .7rem 1rem;
+  border-radius: var(--r); background: var(--ink); color: #fff;
+  box-shadow: var(--lift-lg);
+  animation: pop .25s var(--ease) both;
+}
+.undo .btn { background: #fff; border-color: #fff; color: var(--magenta); }
 
 .idea-title { font-weight: 800; font-size: 1.18rem; line-height: 1.2; }
 .idea-blurb { color: var(--ink-2); font-size: .95rem; line-height: 1.4; }
@@ -307,6 +379,12 @@ img { max-width: 100%; }
 
 .tips { margin: 0; padding-left: 1.1rem; display: grid; gap: .4rem; color: var(--ink-2); line-height: 1.45; }
 
+/* Keep is an action in its own right here, not an afterthought beside Make */
+.sheet-do { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: .7rem; }
+.btn-keep { background: var(--pink); border-color: var(--pink); color: #fff; }
+/* once it is kept it is a finished state, not a second primary button */
+.btn-keep.is-on { background: var(--tint); border-color: var(--magenta); color: var(--magenta); }
+
 /* ---------- make mode: one step, full screen ---------- */
 
 .make { position: fixed; inset: 0; z-index: 40; background: var(--paper); display: flex; flex-direction: column; }
@@ -334,7 +412,8 @@ img { max-width: 100%; }
 /* ---------- tabs ---------- */
 
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  /* a flex item at the foot of the shell, not fixed to the document: see body */
+  flex: none; z-index: 30;
   display: grid; grid-template-columns: repeat(3, 1fr);
   padding: .35rem max(.5rem, env(safe-area-inset-right)) calc(.35rem + env(safe-area-inset-bottom, 0px)) max(.5rem, env(safe-area-inset-left));
   background: #fff; border-top: 2px solid var(--hair);

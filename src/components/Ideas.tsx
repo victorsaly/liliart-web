@@ -1,4 +1,6 @@
 import type { Idea, Mess } from '../lib/ai'
+import { Swipe } from './Swipe'
+import { HideIcon, StarIcon } from './icons'
 
 const MESS: Record<Mess, string> = { low: 'Tidy', medium: 'A bit messy', high: 'Messy!' }
 
@@ -8,9 +10,16 @@ interface Props {
   error?: string
   onOpen: (idea: Idea) => void
   onAgain: () => void
+  /** keep this one, or un-keep it if it is already kept */
+  onKeep: (idea: Idea) => void
+  /** take it off the list — nothing is written down */
+  onHide: (idea: Idea) => void
+  keptIds: Set<string>
+  /** the ones being written out right now, so Keep can say so */
+  keeping: Set<string>
 }
 
-export function Ideas({ ideas, state, error, onOpen, onAgain }: Props) {
+export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, keptIds, keeping }: Props) {
   if (state === 'idle') return null
 
   if (state === 'thinking') {
@@ -47,20 +56,49 @@ export function Ideas({ ideas, state, error, onOpen, onAgain }: Props) {
           {state === 'stale' ? 'Think again' : 'More ideas'}
         </button>
       </p>
+
+      <p className="swipe-hint">Slide a card right to keep it, left to hide it.</p>
+
       <div className="ideas" style={state === 'stale' ? { opacity: .55 } : undefined}>
-        {ideas.map((idea) => (
-          <button type="button" className="idea" key={idea.id} onClick={() => onOpen(idea)}>
-            <span className="idea-title">{idea.title}</span>
-            <span className="idea-blurb">{idea.blurb}</span>
-            <span className="idea-meta">
-              <span className="chip chip-accent">{idea.minutes} min</span>
-              <span className="chip">{MESS[idea.mess]}</span>
-              {idea.alsoNeed.length > 0 && (
-                <span className="chip chip-need">also need: {idea.alsoNeed.join(', ')}</span>
-              )}
-            </span>
-          </button>
-        ))}
+        {ideas.map((idea) => {
+          const kept = keptIds.has(idea.id)
+          const busy = keeping.has(idea.id)
+          return (
+            <Swipe
+              key={idea.id}
+              right={{
+                label: kept ? 'Kept' : 'Keep', tone: 'go',
+                icon: <StarIcon filled={kept} />, run: () => onKeep(idea),
+              }}
+              left={{ label: 'Hide', tone: 'bin', icon: <HideIcon />, run: () => onHide(idea) }}
+            >
+              <div className={`idea ${kept ? 'is-kept' : ''}`}>
+                <button type="button" className="idea-body" onClick={() => onOpen(idea)}>
+                  <span className="idea-title">{idea.title}</span>
+                  <span className="idea-blurb">{idea.blurb}</span>
+                  <span className="idea-meta">
+                    <span className="chip chip-accent">{idea.minutes} min</span>
+                    <span className="chip">{MESS[idea.mess]}</span>
+                    {idea.alsoNeed.length > 0 && (
+                      <span className="chip chip-need">also need: {idea.alsoNeed.join(', ')}</span>
+                    )}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`keep ${kept ? 'is-on' : ''}`}
+                  onClick={() => onKeep(idea)}
+                  aria-pressed={kept}
+                  disabled={busy}
+                >
+                  <StarIcon filled={kept} />
+                  <span>{busy ? 'Keeping…' : kept ? 'Kept' : 'Keep'}</span>
+                </button>
+              </div>
+            </Swipe>
+          )
+        })}
       </div>
     </>
   )

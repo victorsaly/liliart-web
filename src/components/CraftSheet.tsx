@@ -161,11 +161,14 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '.7rem' }}>
-              <button type="button" className="btn" onClick={keep} aria-pressed={kept}>
+            <div className="sheet-do">
+              <button
+                type="button" className={`btn btn-big btn-keep ${kept ? 'is-on' : ''}`}
+                onClick={keep} aria-pressed={kept}
+              >
                 <StarIcon filled={kept} /> {kept ? 'Kept' : 'Keep it'}
               </button>
-              <button type="button" className="btn btn-go" style={{ flex: 1 }} onClick={() => onMake(craft)}>
+              <button type="button" className="btn btn-big btn-go" onClick={() => onMake(craft)}>
                 Let's make it <ArrowRightIcon />
               </button>
             </div>

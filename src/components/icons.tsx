@@ -66,6 +66,22 @@ export const PlusIcon = (p: Props) => (
   <svg {...base} {...p}><path d="M12 5.5v13M5.5 12h13" /></svg>
 )
 
+export const BinIcon = (p: Props) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 6.5h15M9.5 6.5V4.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.7" />
+    <path d="M6.2 6.5 7 19.2a1.6 1.6 0 0 0 1.6 1.5h6.8a1.6 1.6 0 0 0 1.6-1.5l.8-12.7" />
+    <path d="M10.4 10.2v6.6M13.6 10.2v6.6" />
+  </svg>
+)
+
+export const HideIcon = (p: Props) => (
+  <svg {...base} {...p}>
+    <path d="M3.2 12S6.7 6.2 12 6.2 20.8 12 20.8 12 17.3 17.8 12 17.8 3.2 12 3.2 12z" />
+    <circle cx="12" cy="12" r="2.6" />
+    <path d="M4.5 19.5 19.5 4.5" />
+  </svg>
+)
+
 export const CloseIcon = (p: Props) => (
   <svg {...base} {...p}><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
 )
