@@ -34,7 +34,23 @@ const CORS = (origin, allowed) => ({
 const now = () => Math.floor(Date.now() / 1000);
 const OPENAI = "https://api.openai.com/v1";
 const MODEL = "gpt-4o-mini";
-const DAILY = 60;
+/*
+ * The daily ceiling, in units rather than calls: it is here so a leaked
+ * endpoint cannot drain the key overnight, not to ration a family. One
+ * household shares one address, so a parent and a child both making things
+ * count against the same number — hence the room.
+ *
+ * A drawing is a real image generation and costs roughly an order of
+ * magnitude more than asking for text, so it is priced accordingly. A whole
+ * craft — photo, ideas, the steps, the picture — is about nine units.
+ */
+const DAILY = 240;
+const COST = {
+  "/v1/ai/materials": 1,
+  "/v1/ai/ideas": 1,
+  "/v1/ai/craft": 1,
+  "/v1/ai/picture": 6,
+};
 
 const str = (v, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const strs = (v, max = 40) => (Array.isArray(v) ? v.map((x) => str(x, 120)).filter(Boolean).slice(0, max) : []);
@@ -70,7 +86,7 @@ const SAFETY =
   "Use short, plain sentences a seven-year-old can read. No brand names.";
 
 let usageReady = false;
-async function spend(request, env) {
+async function spend(request, env, cost = 1) {
   if (!usageReady) {
     await env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS usage (key TEXT PRIMARY KEY, count INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
@@ -80,9 +96,9 @@ async function spend(request, env) {
   const who = request.headers.get("cf-connecting-ip") ?? "unknown";
   const key = `${who}:${new Date().toISOString().slice(0, 10)}`;
   const row = await env.DB.prepare(
-    "INSERT INTO usage (key, count, updated_at) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at RETURNING count",
-  ).bind(key, now()).first();
-  return row?.count ?? 1;
+    "INSERT INTO usage (key, count, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET count = count + excluded.count, updated_at = excluded.updated_at RETURNING count",
+  ).bind(key, cost, now()).first();
+  return row?.count ?? cost;
 }
 
 async function chatJSON(env, system, user, maxTokens) {
@@ -125,8 +141,11 @@ async function route(request, env, url) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return json({ error: "bad request" }, { status: 400 });
 
-  if (await spend(request, env) > DAILY) {
-    return json({ error: "that's today's limit from here — have a go again tomorrow" }, { status: 429 });
+  if (await spend(request, env, COST[pathname] ?? 1) > DAILY) {
+    return json(
+      { error: "that's today's limit for this home — it starts again at midnight" },
+      { status: 429 },
+    );
   }
 
   /* ---------- 1. what is in the photo ---------- */
