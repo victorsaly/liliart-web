@@ -1,71 +1,91 @@
 # LiliArt
 
-Photograph the odds and ends you already have — boxes, tubes, lids, odd socks —
-and LiliArt works out what a child could make from them, then writes it out one
-step at a time.
+Photograph the odds and ends you already have (boxes, tubes, lids, scraps, odd
+socks) and LiliArt suggests things a child could make with them, then walks
+through one of them step by step. It is a web app for children of about five to
+ten and the grown-up sitting next to them.
 
-**[liliart.victorsaly.com](https://liliart.victorsaly.com)**
+**Try it: [liliart.victorsaly.com](https://liliart.victorsaly.com)** (free, no
+account, installable as an app)
 
-The web version of the [LiliArt](https://github.com/victorsaly/liliart) .NET MAUI
-app, rebuilt so it opens in a tap with nothing to install.
+![LiliArt: what can we make?](public/social-card.png)
 
-## What it does
+## What it offers
 
-One photo of the table → the things it can see, as stickers you can correct →
-a few different things you could make with them → one of those written out in
-full → a Make mode that shows a single step at a time.
+<p>
+  <img src="docs/images/how-it-works.jpg" width="200" alt="The how-it-works screen: put your things out, take a photo, pick an idea, make it">
+  <img src="docs/images/materials.jpg" width="200" alt="The things it spotted in the photo, shown as stickers you can remove">
+  <img src="docs/images/ideas.jpg" width="200" alt="Craft ideas with time, mess level and anything extra you need">
+  <img src="docs/images/make-mode.jpg" width="200" alt="Make mode: one step at a time with a picture of the step being done">
+</p>
 
-Anything you like can be kept. Kept crafts live in the browser, so they open
-with the wifi off, and nothing about a child's making ever leaves the device.
+- **Photo in, materials out.** Take a photo with the camera or pick one from the
+  device. It lists what it can see, with rough amounts, as stickers you can
+  remove if it got something wrong.
+- **Ideas that use what you have.** A handful of crafts, each with a time, how
+  messy it is, and anything extra you would need (tape, felt tips). Change the
+  list and it offers to think again.
+- **A full write-up for each idea.** Tools and what each is for, numbered
+  steps, and a drawing of roughly how the finished thing might look.
+- **Make mode.** One step per screen in big type, with a picture of that step
+  being done, a progress bar, and the screen kept awake while you work. Steps
+  that need scissors, a glue gun or anything hot or sharp are marked
+  **A grown-up does this bit**.
+- **Kept.** Slide an idea right to keep it, left to hide it. Kept crafts are
+  stored on the device and open with no internet. Photograph what you made at
+  the end and it goes on your shelf.
+- **Installable and offline-aware.** It is a PWA with a service worker. Without
+  a connection it says so, and still opens everything already kept.
+- A link to [Lili's stories](https://victorsaly.github.io/LilianaBlog/), the
+  companion story site.
 
-## Written for a seven-year-old
+## Safety rules
 
-The model is told the audience before it is told the task, and it is told what
-it may *not* suggest as firmly as what it should: nothing needing an oven, a
-hob, a naked flame, bleach, solvents or power tools. Any step involving
-scissors, a glue gun, or anything hot or sharp comes back flagged, and the app
-puts **a grown-up does this bit** on it.
+Every request to the model starts with the same house rules (`SAFETY` in
+`worker/src/index.js`): the audience is a child of about seven with a parent
+nearby, so nothing needing an oven, hob, naked flame, bleach, solvents or power
+tools; any step with scissors, a hot glue gun or anything sharp or hot is
+flagged for a grown-up; short, plain sentences and no brand names.
 
-That rule lives in one place — `SAFETY` in `worker/src/index.js` — so it shapes
-every answer the app can produce.
+## How it works
 
-## How it is put together
+The browser never holds an API key. The front end, a static React app on GitHub
+Pages, calls `liliart-api`, a small Cloudflare Worker that holds the OpenAI key
+and exposes four endpoints:
 
-```
-src/
-  App.tsx              the one page: table → ideas → craft → make
-  components/
-    PhotoStep.tsx      camera, file picker and drop target
-    Materials.tsx      what it saw, as stickers you can peel off
-    Ideas.tsx          a few things you could make
-    CraftSheet.tsx     one idea written out: tools, steps, tips
-    MakeScreen.tsx     one step, full screen, screen kept awake
-    Kept.tsx           saved crafts
-  lib/
-    ai.ts              the three calls, and what to say when they fail
-    photo.ts           768px JPEG before anything is uploaded
-    saved.ts           local storage, with a cached snapshot for React
-  styles/make.css      the whole look
-worker/                the Cloudflare Worker that holds the OpenAI key
-```
+| Endpoint | In | Out |
+| --- | --- | --- |
+| `POST /v1/ai/materials` | a photo, shrunk to 768px first | the materials in it |
+| `POST /v1/ai/ideas` | the materials | a few things to make |
+| `POST /v1/ai/craft` | one idea | tools, steps, time, mess |
+| `POST /v1/ai/picture` | a craft or one step | an illustration |
 
-**The key is never in the browser.** The front end talks only to `liliart-api`,
-a small Cloudflare Worker that holds the OpenAI key and meters use per day per
-address, so finding the endpoint does not mean spending the bill. This is the
-one thing worth copying from this repo: a key compiled into a public bundle is
-a key anybody can read.
+Text comes from `gpt-4o-mini` and pictures from `gpt-image-1-mini`. The worker
+limits CORS to the site's own origins and meters use per address per day in a
+D1 table, so finding the endpoint does not mean running up the bill.
 
-## Running it
+The table photo is sent to the worker to be read. Kept crafts and photos of
+finished makes stay in the browser's local storage.
+
+## Tech stack
+
+React 19, TypeScript, Vite, a hand-written service worker, Cloudflare Workers
+and D1, OpenAI. Deployed to GitHub Pages by `.github/workflows/deploy.yml` on
+every push to `main`.
+
+## Run locally
 
 ```bash
 npm install
-npm run dev
+npm run dev       # http://localhost:5173
+npm run build     # type-check, build, then write dist/sw.js
+npm run lint
 ```
 
-It talks to the deployed worker by default. To point it elsewhere, set
+The dev server talks to the deployed worker by default. To use another, set
 `VITE_LILIART_API` in `.env`.
 
-For the worker:
+To deploy your own worker:
 
 ```bash
 cd worker
@@ -73,14 +93,24 @@ npx wrangler secret put OPENAI_API_KEY
 npx wrangler deploy
 ```
 
-## Design
+It needs a D1 database bound as `DB` (see `worker/wrangler.toml`) and your
+front end's origin in `ALLOWED_ORIGINS`. The usage table is created on first
+request.
 
-**Making Table** — the interface is the table you make things on. Warm paper
-ground over a faint cutting-mat grid, cards that look cut out and laid down (a
-thick ink edge and a hard offset shadow), and poster colours a seven-year-old
-would pick from a pot. Fredoka for anything read at a glance, the system face
-for anything read properly.
+## Project structure
 
-## Built with
+```
+src/
+  App.tsx            Table and Kept tabs, plus the craft and make screens
+  components/        PhotoStep, Camera, Materials, Ideas, CraftSheet,
+                     MakeScreen, Kept, HowItWorks, Swipe, ...
+  lib/ai.ts          calls to the worker and friendly error messages
+  lib/photo.ts       resizes photos before upload
+  lib/saved.ts       kept crafts in local storage
+  styles/make.css    all the styling
+public/              icons, manifest, social card, how-it-works photos
+scripts/             builds the service worker with the list of files to cache
+worker/              the Cloudflare Worker (liliart-api)
+```
 
-React 19 · TypeScript · Vite · Cloudflare Workers · D1 · OpenAI gpt-4o-mini
+Made by [Victor Saly](https://victorsaly.com).
