@@ -1,6 +1,7 @@
-import type { Idea, Mess } from '../lib/ai'
+import { useEffect, useState } from 'react'
+import { drawIdea, type Idea, type Mess } from '../lib/ai'
 import { Swipe } from './Swipe'
-import { HideIcon, StarIcon } from './icons'
+import { ArrowRightIcon, HideIcon, StarIcon } from './icons'
 
 const MESS: Record<Mess, string> = { low: 'Tidy', medium: 'A bit messy', high: 'Messy!' }
 
@@ -27,7 +28,7 @@ export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, ke
       <>
         <p className="label">Thinking of things to make…</p>
         <div className="ideas">
-          {[0, 1, 2].map((n) => (
+          {[0, 1, 2, 3].map((n) => (
             <div className="skel" key={n} aria-hidden="true">
               <span style={{ width: '55%', height: '1.3rem' }} />
               <span style={{ width: '90%' }} />
@@ -73,7 +74,9 @@ export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, ke
               left={{ label: 'Hide', tone: 'bin', icon: <HideIcon />, run: () => onHide(idea) }}
             >
               <div className={`idea ${kept ? 'is-kept' : ''}`}>
-                <button type="button" className="idea-body" onClick={() => onOpen(idea)}>
+                <button type="button" className="idea-body has-art" onClick={() => onOpen(idea)}>
+                  {/* keyed, so a new idea starts with an empty frame */}
+                  <IdeaArt key={idea.id} idea={idea} />
                   <span className="idea-title">{idea.title}</span>
                   <span className="idea-blurb">{idea.blurb}</span>
                   <span className="idea-meta">
@@ -85,21 +88,58 @@ export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, ke
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  className={`keep ${kept ? 'is-on' : ''}`}
-                  onClick={() => onKeep(idea)}
-                  aria-pressed={kept}
-                  disabled={busy}
-                >
-                  <StarIcon filled={kept} />
-                  <span>{busy ? 'Keeping…' : kept ? 'Kept' : 'Keep'}</span>
-                </button>
+                {/* Two things to do with an idea, and the one that moves you
+                    on is the one that looks like the way forward. Before this
+                    row, Keep was the only button on the card, so it was the
+                    one that got pressed. */}
+                <div className="idea-do">
+                  <button
+                    type="button"
+                    className={`keep ${kept ? 'is-on' : ''}`}
+                    onClick={() => onKeep(idea)}
+                    aria-pressed={kept}
+                    disabled={busy}
+                  >
+                    <StarIcon filled={kept} />
+                    <span>{busy ? 'Keeping…' : kept ? 'Kept' : 'Keep'}</span>
+                  </button>
+                  <button type="button" className="go" onClick={() => onOpen(idea)}>
+                    <span>Make this</span> <ArrowRightIcon />
+                  </button>
+                </div>
               </div>
             </Swipe>
           )
         })}
       </div>
     </>
+  )
+}
+
+/**
+ * The picture on a card. It arrives after the words do, so the card is
+ * readable straight away and the picture lands in a space already held for
+ * it. If it cannot be drawn the space stays a plain tint: the card still
+ * works, and an error here would be noise.
+ */
+function IdeaArt({ idea }: { idea: Idea }) {
+  const [art, setArt] = useState<string | null>(null)
+  const [waiting, setWaiting] = useState(true)
+
+  useEffect(() => {
+    let live = true
+    drawIdea(idea).then((image) => {
+      if (!live) return
+      setArt(image)
+      setWaiting(false)
+    })
+    return () => { live = false }
+  }, [idea])
+
+  return (
+    <span className="idea-art">
+      {/* the title beside it says what this is */}
+      {art ? <img src={art} alt="" /> : waiting ? <i aria-hidden="true" /> : null}
+    </span>
   )
 }

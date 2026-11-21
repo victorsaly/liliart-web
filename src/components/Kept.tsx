@@ -45,7 +45,7 @@ export function Kept({ crafts, onOpen }: Props) {
     <>
       <p className="swipe-hint">Slide a card left to remove it, right to start making it.</p>
 
-      <div className="ideas">
+      <div className="ideas shelf">
         {crafts.map((craft) => (
           <Swipe
             key={craft.id}
@@ -54,9 +54,12 @@ export function Kept({ crafts, onOpen }: Props) {
           >
             <div className={`idea ${craft.made ? 'is-made' : ''}`}>
               <button type="button" className="idea-body" onClick={() => onOpen(craft)}>
-                {craft.made && (
+                {/* yours if you made it, else the drawing of the idea */}
+                {craft.made ? (
                   <img className="made-thumb" src={craft.made} alt={`The ${craft.title} you made`} />
-                )}
+                ) : craft.drawing ? (
+                  <img className="made-thumb" src={craft.drawing} alt={`A drawing of the ${craft.title}`} />
+                ) : null}
                 <span className="idea-title">{craft.title}</span>
                 <span className="idea-blurb">{craft.summary}</span>
                 <span className="idea-meta">
@@ -67,10 +70,15 @@ export function Kept({ crafts, onOpen }: Props) {
                 </span>
               </button>
 
-              <button type="button" className="keep is-bin" onClick={() => drop(craft)}>
-                <BinIcon />
-                <span>Remove</span>
-              </button>
+              <div className="idea-do">
+                <button type="button" className="keep is-bin" onClick={() => drop(craft)}>
+                  <BinIcon />
+                  <span>Remove</span>
+                </button>
+                <button type="button" className="go" onClick={() => onOpen(craft)}>
+                  <span>{craft.made ? 'Make it again' : 'Make it'}</span> <ArrowRightIcon />
+                </button>
+              </div>
             </div>
           </Swipe>
         ))}

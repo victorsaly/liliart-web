@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { drawStep, type Craft } from '../lib/ai'
 import { shrink, toDataUrl } from '../lib/photo'
 import * as saved from '../lib/saved'
+import { keepPlace, placeIn } from '../lib/place'
+import { useSpeak } from '../lib/speak'
 import { Shout } from './Shout'
 import { TakePhoto } from './TakePhoto'
-import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, GrownUpIcon, PictureIcon, RosetteIcon } from './icons'
+import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GrownUpIcon, PictureIcon, RosetteIcon, SpeakerIcon } from './icons'
 
 interface Props {
   craft: Craft
@@ -19,9 +21,14 @@ interface Props {
  * asks at step three. The screen is asked to stay awake while it is open.
  */
 export function MakeScreen({ craft, onDone, onBack }: Props) {
-  const [at, setAt] = useState(0)
+  /* pick up where this craft was left, not at the beginning */
+  const [at, setAt] = useState(() => placeIn(craft.id, craft.steps.length))
   const [finished, setFinished] = useState(false)
   const [art, setArt] = useState<Record<number, string>>({})
+  /* steps whose picture could not be drawn: no wifi, or today's limit */
+  const [noArt, setNoArt] = useState<Record<number, boolean>>({})
+  const [again, setAgain] = useState(0)
+  const { can: canSpeak, speaking, say, hush } = useSpeak()
   const step = craft.steps[at]
   const last = at === craft.steps.length - 1
 
@@ -38,13 +45,30 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
     const fetchOne = (n: number) => {
       if (n < 0 || n >= craft.steps.length) return
       drawStep(craft, n, stuff).then((image) => {
-        if (live && image) setArt((a) => (a[n] ? a : { ...a, [n]: image }))
+        if (!live) return
+        if (image) setArt((a) => (a[n] ? a : { ...a, [n]: image }))
+        /* say so, so the frame can get out of the way instead of spinning
+           for ever — a failed picture used to look exactly like a slow one */
+        setNoArt((f) => (f[n] === !image ? f : { ...f, [n]: !image }))
       })
     }
     fetchOne(at)
     fetchOne(at + 1)
     return () => { live = false }
-  }, [at, craft])
+  }, [at, craft, again])
+
+  /* the wifi coming back is a reason to ask for the picture again */
+  useEffect(() => {
+    const back = () => setAgain((n) => n + 1)
+    window.addEventListener('online', back)
+    return () => window.removeEventListener('online', back)
+  }, [])
+
+  /* remember the step, and stop reading the old one when it changes */
+  useEffect(() => {
+    keepPlace(craft.id, at)
+    hush()
+  }, [craft.id, at, hush])
 
   useEffect(() => {
     let lock: WakeLockSentinel | null = null
@@ -75,8 +99,10 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
   return (
     <div className="make">
       <div className="make-top">
+        {/* "Close", not "Back": the button at the foot goes back a step, and
+            two buttons with one name did two different things */}
         <button type="button" className="btn btn-small" onClick={onBack}>
-          <ArrowLeftIcon /> Back
+          <CloseIcon /> Close
         </button>
         <div className="pips" aria-hidden="true">
           {craft.steps.map((_, n) => <i key={n} className={n <= at ? 'is-on' : ''} />)}
@@ -85,29 +111,46 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
       </div>
 
       <div className="make-body">
-        <figure className="make-art">
-          {art[at]
-            ? <img src={art[at]} alt={`Someone doing this step: ${step.title}`} />
-            : <div className="make-art-wait"><span /></div>}
-        </figure>
+        {/* with no picture to show, the frame goes and the words take the room */}
+        {(art[at] || !noArt[at]) && (
+          <figure className={`make-art ${step.grownUp ? 'is-grownup' : ''}`}>
+            {art[at]
+              ? <img src={art[at]} alt={`Someone doing this step: ${step.title}`} />
+              : <div className="make-art-wait"><span /><p>Drawing this step…</p></div>}
+          </figure>
+        )}
 
+        <div className="make-words">
+        {/* said before the step is read, not after: this is the app's one
+            safety signal, and it used to be the smallest text on the screen */}
+        {step.grownUp && (
+          <p className="handover"><GrownUpIcon /> <span>Pass this one to your grown-up</span></p>
+        )}
         <div className="make-num">{at + 1}</div>
         {/* keyed on the step so the words drop in again each time it changes */}
         <h2 className="make-title" key={at}><Shout quick>{step.title}</Shout></h2>
         <p className="make-text">{step.description}</p>
-        {step.grownUp && (
-          <span className="grownup"><GrownUpIcon /> A grown-up does this bit</span>
+        {canSpeak && (
+          <button
+            type="button" className={`btn read ${speaking ? 'is-on' : ''}`} aria-pressed={speaking}
+            onClick={() => (speaking ? hush() : say(
+              `${step.grownUp ? 'Pass this one to your grown-up. ' : ''}Step ${at + 1}. ${step.title}. ${step.description}`,
+            ))}
+          >
+            <SpeakerIcon /> {speaking ? 'Stop reading' : 'Read it to me'}
+          </button>
         )}
+        </div>
       </div>
 
       <div className="make-foot">
         {at > 0 && (
           <button type="button" className="btn" onClick={() => setAt(at - 1)}>
-            <ArrowLeftIcon /> Back a step
+            <ArrowLeftIcon /> Back
           </button>
         )}
         {last ? (
-          <button type="button" className="btn btn-go" onClick={() => setFinished(true)}>
+          <button type="button" className="btn btn-go" onClick={() => { keepPlace(craft.id, 0); setFinished(true) }}>
             I made it!
           </button>
         ) : (
@@ -170,11 +213,17 @@ function Finished({ craft, onDone }: { craft: Craft; onDone: () => void }) {
             <img src={made} alt={`The ${craft.title} you made`} />
             <figcaption>Yours</figcaption>
           </figure>
+        ) : craft.drawing ? (
+          /* what they were aiming at, where their own photo is about to go */
+          <figure className="made is-idea">
+            <img src={craft.drawing} alt={`A drawing of the ${craft.title}`} />
+            <figcaption>The idea</figcaption>
+          </figure>
         ) : (
           <div className="done-mark"><RosetteIcon /></div>
         )}
 
-        <h2>You made it!</h2>
+        <h2><Shout>You made it!</Shout></h2>
         <p>
           {made
             ? `${craft.title} is on your shelf now. Show someone.`
