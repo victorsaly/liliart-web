@@ -266,7 +266,12 @@ async function route(request, env, url) {
         "The brackets say roughly how much of each thing there is; keep the steps within that.\n" +
         "Write it out so a seven-year-old can follow it. Each step is one action, in one or two short " +
         "sentences, and says what it should look like when that step is done. " +
-        "Mark any step a grown-up should do with \"grownUp\": true. " +
+        /* without this, four steps in seven came back as "ask a grown-up to
+           cut": safe, and nothing left for the child to do */
+        "This is the child's craft, so plan it for the child to do: tear, fold, roll, scrunch, stick and " +
+        "draw rather than cut. If something really must be cut, put all the cutting into one step near " +
+        "the start for a grown-up, so the rest is the child's. " +
+        "Mark any step a grown-up should do with \"grownUp\": true; that should be one step, two at most. " +
         'Reply with JSON: {"summary":"two sentences on what we are making",' +
         '"minutes":30,"mess":"low|medium|high",' +
         '"tools":[{"tool":"...","note":"what it is for"}],' +
@@ -313,7 +318,10 @@ async function route(request, env, url) {
           ? "Show a pair of adult's hands doing this one action, close up, on a plain pale table in soft " +
             "daylight. If anything is being cut, it is with ordinary round-ended scissors, never a knife or blade. "
           : "Show a pair of child's hands doing this one action, close up, on a plain pale table in soft " +
-            "daylight. ") +
+            "daylight. The hands hold only the craft itself: paper, card, tape, string. There are no " +
+            /* left to itself the model reaches for scissors in any craft
+               picture, including for a step that is only "choose a tube" */
+            "scissors, knives or blades anywhere in the picture, and nothing is being cut. ") +
         "The craft is part-built and handmade — wonky, visible tape and glue — because this " +
         "is the middle of making it, not the end. Hands only, never a face. " +
         "No text, no words, no letters, no numbers, no labels, no watermark."
