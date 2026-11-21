@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Craft, Idea, Material, Mess } from '../lib/ai'
 import { drawCraft, explain, openCraft } from '../lib/ai'
 import { shrink } from '../lib/photo'
+import { usePicturesNote } from '../lib/usePicturesNote'
 import * as saved from '../lib/saved'
 import { ArrowLeftIcon, ArrowRightIcon, GrownUpIcon, StarIcon } from './icons'
 
@@ -26,6 +27,7 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
   /* which craft we have already asked for a drawing of. A ref, not state:
      as a dependency it would re-run this effect and cancel its own request. */
   const asked = useRef<string | undefined>(undefined)
+  const picturesNote = usePicturesNote()
   const latest = useRef(materials)
   latest.current = materials
 
@@ -123,8 +125,14 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
               <figure className="craft-art">
                 {drawing
                   ? <img src={drawing} alt={`A drawing of the finished ${craft.title}`} />
-                  : <div className="craft-art-wait"><span /><p>Drawing what it might look like…</p></div>}
-                <figcaption>{made ? 'The idea' : 'Roughly how yours might turn out'}</figcaption>
+                  : picturesNote
+                    /* it is not coming, so stop looking as though it is */
+                    ? <div className="craft-art-wait is-off"><p>{picturesNote}</p></div>
+                    : <div className="craft-art-wait"><span /><p>Drawing what it might look like…</p></div>}
+                {/* a caption needs a picture to be the caption of */}
+                {(drawing || !picturesNote) && (
+                  <figcaption>{made ? 'The idea' : 'Roughly how yours might turn out'}</figcaption>
+                )}
               </figure>
               {made && (
                 <figure className="craft-art is-yours">

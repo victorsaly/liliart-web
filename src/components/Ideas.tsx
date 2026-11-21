@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { drawIdea, type Idea, type Mess } from '../lib/ai'
+import { usePicturesNote } from '../lib/usePicturesNote'
 import { Swipe } from './Swipe'
 import { ArrowRightIcon, HideIcon, StarIcon } from './icons'
 
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, keptIds, keeping }: Props) {
+  const picturesNote = usePicturesNote()
   if (state === 'idle') return null
 
   if (state === 'thinking') {
@@ -59,6 +61,7 @@ export function Ideas({ ideas, state, error, onOpen, onAgain, onKeep, onHide, ke
       </p>
 
       <p className="swipe-hint">Slide a card right to keep it, left to hide it.</p>
+      {picturesNote && <p className="note no-pictures">{picturesNote} You can still make these.</p>}
 
       <div className="ideas" style={state === 'stale' ? { opacity: .55 } : undefined}>
         {ideas.map((idea) => {

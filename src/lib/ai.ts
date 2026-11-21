@@ -56,7 +56,10 @@ export interface Craft {
   savedAt?: string
 }
 
-export class AiError extends Error {}
+export class AiError extends Error {
+  /** the HTTP status, when the worker answered at all */
+  status?: number
+}
 
 /** What to tell a child when a call fails. Never a status code. */
 export function explain(err: unknown, fallback: string): string {
@@ -82,8 +85,48 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     throw new AiError("Couldn't reach the internet. Have a look at the wifi and try again.")
   }
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new AiError(sentence(data?.error) ?? 'That did not work. Try again in a moment.')
+  if (!res.ok) {
+    const err = new AiError(sentence(data?.error) ?? 'That did not work. Try again in a moment.')
+    err.status = res.status
+    throw err
+  }
   return data as T
+}
+
+/*
+ * Why there are no pictures, when the reason is a limit.
+ *
+ * A picture that cannot be drawn is not worth an error: the craft still
+ * works without it. But "no more pictures today" is worth saying once, in
+ * plain words, or the child is left looking at empty frames and wondering.
+ * The worker says so with a 429; the note it sends is kept here and cleared
+ * by the next picture that does arrive.
+ */
+let picturesNote: string | undefined
+const noteWatchers = new Set<() => void>()
+
+function setPicturesNote(note: string | undefined): void {
+  if (note === picturesNote) return
+  picturesNote = note
+  noteWatchers.forEach((tell) => tell())
+}
+
+export const getPicturesNote = (): string | undefined => picturesNote
+export function watchPicturesNote(tell: () => void): () => void {
+  noteWatchers.add(tell)
+  return () => { noteWatchers.delete(tell) }
+}
+
+/** Ask for one picture. Null when there is none, with the note set if a limit is why. */
+async function picture(body: unknown): Promise<string | null> {
+  try {
+    const { image } = await post<{ image: string }>('/v1/ai/picture', body)
+    if (image) setPicturesNote(undefined)
+    return image ?? null
+  } catch (err) {
+    if (err instanceof AiError && err.status === 429) setPicturesNote(err.message)
+    return null
+  }
 }
 
 export async function isReady(): Promise<boolean> {
@@ -148,16 +191,8 @@ export async function drawCraft(craft: Craft, materials: Material[]): Promise<st
      not paid for twice */
   const onCard = await ideaArt.get(craft.id)
   if (onCard) return onCard
-  try {
-    const { image } = await post<{ image: string }>('/v1/ai/picture', {
-      what: craft.picture || `${craft.title}. ${craft.summary}`,
-      materials,
-    })
-    return image ?? null
-  } catch {
-    /* the craft is the point; a missing picture is not worth an error */
-    return null
-  }
+  /* the craft is the point; a missing picture is not worth an error */
+  return picture({ what: craft.picture || `${craft.title}. ${craft.summary}`, materials })
 }
 
 /**
@@ -171,15 +206,13 @@ const ideaArt = new Map<string, Promise<string | null>>()
 export function drawIdea(idea: Idea): Promise<string | null> {
   const have = ideaArt.get(idea.id)
   if (have) return have
-  const wanted = post<{ image: string }>('/v1/ai/picture', {
+  const wanted = picture({
     what: `${idea.title}. ${idea.blurb}`,
     materials: idea.uses.map((name) => ({ name })),
+  }).then((image) => {
+    if (!image) ideaArt.delete(idea.id)
+    return image
   })
-    .then((r) => r.image ?? null)
-    .catch(() => {
-      ideaArt.delete(idea.id)
-      return null
-    })
   ideaArt.set(idea.id, wanted)
   return wanted
 }
@@ -202,19 +235,17 @@ export function drawStep(craft: Craft, n: number, materials: Material[]): Promis
   const step = craft.steps[n]
   if (!step) return Promise.resolve(null)
 
-  const wanted = post<{ image: string }>('/v1/ai/picture', {
+  const wanted = picture({
     kind: 'step',
     of: craft.title,
     what: `${step.title}. ${step.description}`,
     grownUp: step.grownUp === true,
     materials,
+  }).then((image) => {
+    /* let it be asked for again later — a limit today is not a limit forever */
+    if (!image) stepArt.delete(key)
+    return image
   })
-    .then((r) => r.image ?? null)
-    .catch(() => {
-      /* let it be asked for again later — a limit today is not a limit forever */
-      stepArt.delete(key)
-      return null
-    })
 
   stepArt.set(key, wanted)
   return wanted
