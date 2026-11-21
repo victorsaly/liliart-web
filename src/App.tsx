@@ -5,11 +5,13 @@ import { Ideas } from './components/Ideas'
 import { CraftSheet } from './components/CraftSheet'
 import { MakeScreen } from './components/MakeScreen'
 import { Kept } from './components/Kept'
-import { HowItWorks, markSeenHow, seenHow } from './components/HowItWorks'
+import { HowItWorks, HowSteps, markSeenHow, seenHow } from './components/HowItWorks'
 import { Shout } from './components/Shout'
-import { BookIcon, ScissorsIcon, StarIcon } from './components/icons'
+import { GrownUps } from './components/GrownUps'
+import { ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
-import { explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
+import { drawIdea, explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
+import { shrink } from './lib/photo'
 import './styles/make.css'
 
 /*
@@ -60,6 +62,7 @@ export default function App() {
   const [open, setOpen] = useState<Idea | null>(null)
   const [making, setMaking] = useState<Craft | null>(null)
   const [how, setHow] = useState(() => !seenHow())
+  const [grownUps, setGrownUps] = useState(false)
   const online = useOnline()
   const run = useRef(0)
   /* the window no longer scrolls — main does, so that is what we rewind */
@@ -127,6 +130,13 @@ export default function App() {
     try {
       const craft = await openCraftOnce(idea, materials)
       if (!saved.save({ ...craft, photo })) setProblem('Kept, but there was no room for the photo.')
+      /* the card's picture goes on the shelf with it, whenever it is ready —
+         keeping does not wait for it */
+      drawIdea(idea).then(async (image) => {
+        const stored = saved.find(craft.id)
+        if (!image || !stored || stored.drawing) return
+        saved.save({ ...stored, drawing: await shrink(image).catch(() => undefined) })
+      })
     } catch (err) {
       setProblem(explain(err, "Couldn't keep that one. Try again in a moment."))
     } finally {
@@ -164,6 +174,10 @@ export default function App() {
     return <HowItWorks onClose={() => { markSeenHow(); setHow(false) }} />
   }
 
+  if (grownUps) {
+    return <GrownUps onClose={() => setGrownUps(false)} />
+  }
+
   if (making) {
     return (
       <MakeScreen
@@ -177,7 +191,7 @@ export default function App() {
   if (open) {
     return (
       <div className="app">
-        <Header onHome={() => { setOpen(null); setTab('table') }} />
+        <Header onHome={() => { setOpen(null); setTab('table') }} onGrownUps={() => setGrownUps(true)} />
         <main>
           <CraftSheet
             idea={open}
@@ -194,81 +208,110 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header onHome={() => { startOver(); setTab('table') }} />
+      <Header onHome={() => { startOver(); setTab('table') }} onGrownUps={() => setGrownUps(true)} />
 
       <main ref={scroller}>
         <div className="page">
           {tab === 'table' && (!photo ? (
-            <>
-              <section className="hero">
-                <h1><Shout>What can we make?</Shout></h1>
-                <p>Show it your bits and bobs, and it will think of things you can make.</p>
-                <button type="button" className="btn btn-small" onClick={() => setHow(true)}>
-                  How it works
-                </button>
-              </section>
+            <div className="home">
+              <div className="home-main">
+                <section className="hero">
+                  <h1><Shout>What can we make?</Shout></h1>
+                  <p>Show it your bits and bobs, and it will think of things you can make.</p>
+                  {/* hidden where the steps are already on the page beside it */}
+                  <button type="button" className="btn btn-small how-open" onClick={() => setHow(true)}>
+                    How it works
+                  </button>
+                </section>
 
-              {online ? <PhotoStep onPhoto={onPhoto} /> : (
-                <div className="empty">
-                  <p>
-                    There is no internet just now, so it cannot think of anything new.
-                    {keptCount > 0
-                      ? ' The ones you kept are still here, though.'
-                      : ' Come back when the wifi is working.'}
-                  </p>
-                  {keptCount > 0 && (
-                    <button type="button" className="btn" onClick={() => { setTab('kept'); top() }}>
-                      <StarIcon filled /> See the {keptCount} you kept
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="label" style={{ marginTop: 0 }}>
-                <span>On the table</span>
-                <button type="button" className="btn btn-small" onClick={startOver}>New photo</button>
+                {online ? <PhotoStep onPhoto={onPhoto} /> : (
+                  <div className="empty">
+                    <p>
+                      There is no internet just now, so it cannot think of anything new.
+                      {keptCount > 0
+                        ? ' The ones you kept are still here, though.'
+                        : ' Come back when the wifi is working.'}
+                    </p>
+                    {keptCount > 0 && (
+                      <button type="button" className="btn" onClick={() => { setTab('kept'); top() }}>
+                        <StarIcon filled /> See the {keptCount} you kept
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <PhotoStep onPhoto={onPhoto} looking={looking} />
+              {/* only where there is room for it: see .home-how */}
+              <aside className="home-how" aria-labelledby="home-how-title">
+                <h2 id="home-how-title">How it works</h2>
+                <HowSteps />
+              </aside>
+            </div>
+          ) : (
+            /*
+             * Three areas — the photo, what it spotted, the ideas — so a wide
+             * screen can lay them side by side instead of in one thin column.
+             */
+            <div className={`work ${looking ? 'is-looking' : ''}`}>
+              <div className="work-photo">
+                <div className="label" style={{ marginTop: 0 }}>
+                  <span>On the table</span>
+                  <button type="button" className="btn btn-small" onClick={startOver}>New photo</button>
+                </div>
+
+                {looking ? (
+                  <PhotoStep onPhoto={onPhoto} looking={looking} />
+                ) : problem && materials.length === 0 ? (
+                  /* nothing came of that photo, so the way to take another is right here */
+                  <PhotoStep onPhoto={onPhoto} />
+                ) : (
+                  /* the photo stays in view: it is what the list below is a list of */
+                  <figure className="shot is-done" style={{ margin: 0 }}>
+                    <img src={photo} alt="The photo you took" />
+                  </figure>
+                )}
+              </div>
 
               {!looking && (
                 <>
-                  {problem && <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>}
+                  <div className="work-stuff">
+                    {problem && <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>}
 
-                  {materials.length > 0 && (
-                    <>
-                      <p className="label">
-                        <span>{materials.length} thing{materials.length === 1 ? '' : 's'} it spotted</span>
-                      </p>
-                      <Materials items={materials} onChange={editMaterials} />
-                    </>
-                  )}
+                    {materials.length > 0 && (
+                      <>
+                        <p className="label">
+                          <span>{materials.length} thing{materials.length === 1 ? '' : 's'} it spotted</span>
+                        </p>
+                        <Materials items={materials} onChange={editMaterials} />
+                      </>
+                    )}
 
-                  {ideasState === 'stale' && (
-                    <button
-                      type="button" className="btn btn-big" style={{ marginTop: '1rem' }}
-                      onClick={() => think(materials)}
-                    >
-                      Think again with this list
-                    </button>
-                  )}
+                    {ideasState === 'stale' && (
+                      <button
+                        type="button" className="btn btn-big" style={{ marginTop: '1rem' }}
+                        onClick={() => think(materials)}
+                      >
+                        Think again with this list
+                      </button>
+                    )}
+                  </div>
 
-                  <Ideas
-                    ideas={ideas}
-                    state={ideasState}
-                    error={ideasError}
-                    onOpen={setOpen}
-                    onAgain={() => think(materials)}
-                    onKeep={keepIdea}
-                    onHide={hideIdea}
-                    keptIds={keptIds}
-                    keeping={keeping}
-                  />
+                  <div className="work-ideas">
+                    <Ideas
+                      ideas={ideas}
+                      state={ideasState}
+                      error={ideasError}
+                      onOpen={setOpen}
+                      onAgain={() => think(materials)}
+                      onKeep={keepIdea}
+                      onHide={hideIdea}
+                      keptIds={keptIds}
+                      keeping={keeping}
+                    />
+                  </div>
                 </>
               )}
-            </>
+            </div>
           ))}
 
           {tab === 'kept' && (
@@ -288,13 +331,15 @@ export default function App() {
   )
 }
 
-function Header({ onHome }: { onHome: () => void }) {
+function Header({ onHome, onGrownUps }: { onHome: () => void; onGrownUps: () => void }) {
   return (
     <header className="top">
       <button type="button" className="brand" onClick={onHome}>
         <img src="/icon.svg" alt="" width="30" height="30" />
         <span>Lili<span className="brand-art">Art</span></span>
       </button>
+      {/* quiet, and out of the thumb's way: it is not for the child */}
+      <button type="button" className="top-link" onClick={onGrownUps}>For grown-ups</button>
     </header>
   )
 }
@@ -321,10 +366,6 @@ function Tabs({ tab, keptCount, onChange }: { tab: Tab; keptCount: number; onCha
         </span>
         <span>Kept</span>
       </button>
-      <a className="tab" href="https://victorsaly.github.io/LilianaBlog/" target="_blank" rel="noopener noreferrer">
-        <span className="tab-icon"><BookIcon /></span>
-        <span>Lili's stories</span>
-      </a>
     </nav>
   )
 }

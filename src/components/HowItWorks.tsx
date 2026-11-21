@@ -41,6 +41,31 @@ const STEPS = [
 ]
 
 /**
+ * The four steps on their own. The first-run screen shows them, and so does
+ * the home screen wherever there is room beside the camera frame — a tablet
+ * has that room, and leaving it blank made the app look unfinished.
+ */
+export function HowSteps() {
+  return (
+    <ol className="how-steps">
+      {STEPS.map((s, n) => (
+        <li key={s.title}>
+          <span className="how-mark">
+            {/* the sentence beside it says the same thing, so this is decorative */}
+            <img src={`/how/${s.img}.jpg`} alt="" width="88" height="88" />
+            <i aria-hidden="true">{n + 1}</i>
+          </span>
+          <span className="how-text">
+            <b>{s.title}</b>
+            <span>{s.text}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/**
  * What happens here, before anything has happened. Shown once, and reachable
  * again from the table — a child meeting this for the first time has no idea
  * that photographing a pile of rubbish is the way in.
@@ -64,21 +89,7 @@ export function HowItWorks({ onClose }: { onClose: () => void }) {
         <p className="how-hello">Hello, this is LiliArt</p>
         <h2 id="how-title">Make something out of what you already have</h2>
 
-        <ol className="how-steps">
-          {STEPS.map((s, n) => (
-            <li key={s.title}>
-              <span className="how-mark">
-                {/* the sentence beside it says the same thing, so this is decorative */}
-                <img src={`/how/${s.img}.jpg`} alt="" width="88" height="88" />
-                <i aria-hidden="true">{n + 1}</i>
-              </span>
-              <span className="how-text">
-                <b>{s.title}</b>
-                <span>{s.text}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
+        <HowSteps />
 
         <button type="button" className="btn btn-go btn-big" onClick={onClose}>
           Let's make something

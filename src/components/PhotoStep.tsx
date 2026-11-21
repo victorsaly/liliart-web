@@ -55,16 +55,16 @@ export function PhotoStep({ onPhoto, looking }: Props) {
       onDragLeave={() => setOver(false)}
       onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files?.[0]) }}
     >
-      {/* TAKE and PICK, side by side and huge, as they are in the MAUI app */}
+      {/* the big pair, side by side and huge, as they are in the MAUI app */}
       <div className="big-pair">
         {/* the pictures say what each one does faster than an icon can */}
         <TakePhoto source="camera" className="big-btn" onPhoto={take}>
           <img src="/how/take.jpg" alt="" width="96" height="96" />
-          <span>TAKE</span>
+          <span>Take a photo</span>
         </TakePhoto>
         <TakePhoto source="library" className="big-btn is-second" onPhoto={take}>
           <img src="/how/pick.jpg" alt="" width="96" height="96" />
-          <span>PICK</span>
+          <span>Choose a photo</span>
         </TakePhoto>
       </div>
       <p className="table-hint">

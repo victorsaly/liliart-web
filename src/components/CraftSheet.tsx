@@ -89,6 +89,8 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
     if (!ok) setProblem('Saved, but there was no room for the photo.')
   }
 
+  const grownUpSteps = craft?.steps.filter((step) => step.grownUp).length ?? 0
+
   return (
     <div className="page">
       <button type="button" className="btn btn-small" onClick={onClose} style={{ marginBottom: '1rem' }}>
@@ -114,6 +116,8 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
 
         {craft && (
           <>
+            <div className="sheet-cols">
+            <div className="sheet-side">
             {/* once you have made one, the two sit together: the idea, and yours */}
             <div className={`craft-arts ${made ? 'is-pair' : ''}`}>
               <figure className="craft-art">
@@ -135,6 +139,12 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
               <span className="chip chip-accent">{craft.minutes} min</span>
               <span className="chip">{MESS[craft.mess]}</span>
               <span className="chip">{craft.steps.length} steps</span>
+              {/* the answer a parent is looking for, before they read a single step */}
+              {grownUpSteps > 0 && (
+                <span className="chip chip-grownup">
+                  <GrownUpIcon /> A grown-up helps with {grownUpSteps} step{grownUpSteps === 1 ? '' : 's'}
+                </span>
+              )}
             </div>
 
             {craft.tools.length > 0 && (
@@ -151,6 +161,9 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
               </div>
             )}
 
+            </div>
+
+            <div className="sheet-main">
             <div className="sheet-block">
               <h3>How to make it</h3>
               <ol className="steps">
@@ -172,6 +185,9 @@ export function CraftSheet({ idea, materials, photo, onClose, onMake }: Props) {
                 <ul className="tips">{craft.tips.map((t, n) => <li key={n}>{t}</li>)}</ul>
               </div>
             )}
+
+            </div>
+            </div>
 
             <div className="sheet-do">
               <button

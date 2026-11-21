@@ -3,7 +3,8 @@
  *
  * The OpenAI key lives here and only here. The browser never sees it, which is
  * the whole reason this worker exists — a key compiled into a public bundle is
- * a key anyone can spend.
+ * a key anyone can spend. The words come from OpenAI; the pictures are drawn
+ * on Workers AI, which needs no key at all.
  *
  * Three calls, matching the three things the app asks:
  *   POST /v1/ai/materials  a photo  -> what craft materials are in it
@@ -34,22 +35,23 @@ const CORS = (origin, allowed) => ({
 const now = () => Math.floor(Date.now() / 1000);
 const OPENAI = "https://api.openai.com/v1";
 const MODEL = "gpt-4o-mini";
+const IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 /*
  * The daily ceiling, in units rather than calls: it is here so a leaked
  * endpoint cannot drain the key overnight, not to ration a family. One
  * household shares one address, so a parent and a child both making things
  * count against the same number — hence the room.
  *
- * A drawing is a real image generation and costs roughly an order of
- * magnitude more than asking for text, so it is priced accordingly. A whole
- * craft — photo, ideas, the steps, the picture — is about nine units.
+ * A drawing costs about twice what a text call does now that it is made on
+ * Workers AI, so it counts double. A whole craft — photo, ideas, the steps,
+ * the finished picture and six step pictures — is about seventeen units.
  */
 const DAILY = 240;
 const COST = {
   "/v1/ai/materials": 1,
   "/v1/ai/ideas": 1,
   "/v1/ai/craft": 1,
-  "/v1/ai/picture": 6,
+  "/v1/ai/picture": 2,
 };
 
 const str = (v, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -269,8 +271,15 @@ async function route(request, env, url) {
     const prompt = isStep
       ? `A photograph of one step of making ${of || "a child's craft"} at a kitchen table: ${what}. ` +
         (made ? `It is being made from ${made}. ` : "") +
-        "Show a pair of child's hands doing this one action, close up, on a plain pale table in soft " +
-        "daylight. The craft is part-built and handmade — wonky, visible tape and glue — because this " +
+        /* A step marked for a grown-up is drawn with a grown-up doing it. The
+           picture is what a parent glances at, and a child's hand on a blade
+           says the opposite of the label beside it. */
+        (body.grownUp === true
+          ? "Show a pair of adult's hands doing this one action, close up, on a plain pale table in soft " +
+            "daylight. If anything is being cut, it is with ordinary round-ended scissors, never a knife or blade. "
+          : "Show a pair of child's hands doing this one action, close up, on a plain pale table in soft " +
+            "daylight. ") +
+        "The craft is part-built and handmade — wonky, visible tape and glue — because this " +
         "is the middle of making it, not the end. Hands only, never a face. " +
         "No text, no words, no letters, no numbers, no labels, no watermark."
       : `A child's craft made at a kitchen table: ${what}. ` +
@@ -280,29 +289,28 @@ async function route(request, env, url) {
         "a bit wonky, visible tape and glue, cut edges not quite straight — not a polished " +
         "studio product. No people, no hands, no text, no labels, no watermark.";
 
-    const response = await fetch(`${OPENAI}/images/generations`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        /* the account has no dall-e models; gpt-image-1-mini at low quality is
-           the cheapest thing that still looks handmade */
-        model: "gpt-image-1-mini",
-        n: 1,
-        size: "1024x1024",
-        quality: "low",
-        prompt,
-      }),
-    }).catch(() => null);
-
-    if (!response) return json({ error: "could not draw it" }, { status: 502 });
-    if (response.status === 429) return json({ error: "the drawing is busy — try again in a moment" }, { status: 429 });
-    if (!response.ok) return json({ error: "could not draw it" }, { status: 502 });
-    const data = await response.json().catch(() => null);
-    const made64 = data?.data?.[0]?.b64_json;
-    if (!made64) return json({ error: "could not draw it" }, { status: 502 });
-    /* these models answer in base64, not a URL — hand it over as a data URL so
-       the browser has nothing else to fetch */
-    return json({ image: `data:image/png;base64,${made64}` });
+    /*
+     * Drawn by FLUX.2 klein on Workers AI rather than by OpenAI: about a
+     * quarter of the price, and in a side-by-side on these prompts it was the
+     * one that looked made by a child. It only takes multipart input, even for
+     * a prompt alone, and a FormData has to pass through a Response to get its
+     * boundary written out.
+     */
+    const form = new FormData();
+    form.append("prompt", prompt);
+    form.append("width", "1024");
+    form.append("height", "1024");
+    const packed = new Response(form);
+    const drawn = await env.AI.run(IMAGE_MODEL, {
+      multipart: { body: packed.body, contentType: packed.headers.get("content-type") },
+    }).catch((error) => {
+      console.error("liliart-api picture", error?.message ?? error);
+      return null;
+    });
+    if (!drawn?.image) return json({ error: "could not draw it" }, { status: 502 });
+    /* it answers in base64 — hand it over as a data URL so the browser has
+       nothing else to fetch */
+    return json({ image: `data:image/jpeg;base64,${drawn.image}` });
   }
 
   return json({ error: "not found" }, { status: 404 });

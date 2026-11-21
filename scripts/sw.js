@@ -19,8 +19,7 @@ const VERSION = "__VERSION__";
 const SHELL = __SHELL__;
 
 const CORE = `liliart-core-${VERSION}`;
-const FONTS = `liliart-fonts-${VERSION}`;
-const KEEP = [CORE, FONTS];
+const KEEP = [CORE];
 
 /** The page itself, whatever path the app was opened at. */
 const INDEX = "/index.html";
@@ -57,39 +56,15 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-/** Google's font CSS and the font files it names. */
-const isFont = (url) =>
-  url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
-
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
 
-  /* the API: never cached, never intercepted */
-  if (url.origin !== self.location.origin && !isFont(url)) return;
-
-  /*
-   * Fonts: serve what we have and refresh behind it. The app has a real
-   * system-font fallback, so a cold start with no network looks slightly
-   * different rather than broken.
-   */
-  if (isFont(url)) {
-    event.respondWith(
-      caches.open(FONTS).then(async (cache) => {
-        const hit = await cache.match(request, MATCH);
-        const live = fetch(request)
-          .then((res) => {
-            if (res.ok || res.type === "opaque") cache.put(request, res.clone());
-            return res;
-          })
-          .catch(() => hit);
-        return hit || live;
-      })
-    );
-    return;
-  }
+  /* the API: never cached, never intercepted. The typeface is one of our
+     own files now, so it is in the shell with everything else. */
+  if (url.origin !== self.location.origin) return;
 
   /*
    * Navigations: the network first, so a deployed change is picked up on the

@@ -7,6 +7,9 @@ binding = "DB"
 database_name = "liliart"
 database_id = "5d033bf7-8156-4795-a9a6-a269dc92c863"
 
+[ai]
+binding = "AI"
+
 [vars]
 ALLOWED_ORIGINS = "https://liliart.victorsaly.com,http://localhost:5173,http://localhost:5180,http://localhost:4173"
 

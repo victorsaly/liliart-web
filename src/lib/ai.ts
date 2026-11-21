@@ -136,6 +136,11 @@ export const rememberCraft = (craft: Craft): void => { sheets.set(craft.id, craf
  * one per idea: each of these is a real charge on the key.
  */
 export async function drawCraft(craft: Craft, materials: Material[]): Promise<string | null> {
+  /* the picture on the idea's card is the picture of this craft: the child
+     chose it by looking at it, so the sheet shows the same one, and it is
+     not paid for twice */
+  const onCard = await ideaArt.get(craft.id)
+  if (onCard) return onCard
   try {
     const { image } = await post<{ image: string }>('/v1/ai/picture', {
       what: craft.picture || `${craft.title}. ${craft.summary}`,
@@ -146,6 +151,30 @@ export async function drawCraft(craft: Craft, materials: Material[]): Promise<st
     /* the craft is the point; a missing picture is not worth an error */
     return null
   }
+}
+
+/**
+ * A picture for an idea's card, so four ideas can be told apart without
+ * reading four paragraphs. Drawn from the title and the one-line blurb, which
+ * is all an idea is until it is opened. Held for the session; a failure is
+ * forgotten so that it can be asked for again.
+ */
+const ideaArt = new Map<string, Promise<string | null>>()
+
+export function drawIdea(idea: Idea): Promise<string | null> {
+  const have = ideaArt.get(idea.id)
+  if (have) return have
+  const wanted = post<{ image: string }>('/v1/ai/picture', {
+    what: `${idea.title}. ${idea.blurb}`,
+    materials: idea.uses.map((name) => ({ name })),
+  })
+    .then((r) => r.image ?? null)
+    .catch(() => {
+      ideaArt.delete(idea.id)
+      return null
+    })
+  ideaArt.set(idea.id, wanted)
+  return wanted
 }
 
 /**
@@ -170,6 +199,7 @@ export function drawStep(craft: Craft, n: number, materials: Material[]): Promis
     kind: 'step',
     of: craft.title,
     what: `${step.title}. ${step.description}`,
+    grownUp: step.grownUp === true,
     materials,
   })
     .then((r) => r.image ?? null)

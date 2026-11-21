@@ -127,3 +127,11 @@ export const RosetteIcon = (p: Props) => (
     <path d="M8.6 13.7 6.5 21l5.5-2.6 5.5 2.6-2.1-7.3" />
   </svg>
 )
+
+export const SpeakerIcon = (p: Props) => (
+  <svg {...base} {...p}>
+    <path d="M4 9.5h3l4.5-3.7v12.4L7 14.5H4z" />
+    <path d="M15.2 9.2a4 4 0 0 1 0 5.6" />
+    <path d="M17.8 6.6a7.6 7.6 0 0 1 0 10.8" />
+  </svg>
+)
