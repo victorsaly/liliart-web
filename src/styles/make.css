@@ -204,13 +204,12 @@ img { max-width: 100%; }
   background: var(--magenta); color: #fff;
   transition: transform .1s var(--ease), background-color .15s ease;
 }
-.big-btn:active { transform: scale(.97); }
-.big-btn.is-second { background: var(--pink); }
-.big-btn svg { width: 46px; height: 46px; display: block; }
-.big-btn img {
-  display: block; width: 100%; max-width: 6rem; aspect-ratio: 1;
-  object-fit: cover; border-radius: 12px;
-}
+/* two cards put down by hand: neither is quite straight, and each straightens
+   under a finger */
+.big-btn { transform: rotate(-1.4deg); box-shadow: 0 10px 18px -12px rgba(94, 4, 68, .7); }
+.big-btn.is-second { background: var(--pink); transform: rotate(1.2deg); }
+.big-btn:active, .big-btn.is-second:active { transform: rotate(0) scale(.97); }
+.big-btn .big-art { display: block; width: 78%; max-width: 8.5rem; height: auto; }
 /* a whole phrase now, not one shouted word, so it is set to wrap evenly */
 .big-btn span {
   font-weight: 800; font-size: clamp(1.15rem, 5.2vw, 1.5rem); line-height: 1.12;
@@ -778,9 +777,10 @@ img { max-width: 100%; }
   .skel span, .bar i { animation-duration: 3s; }
   .craft-art-wait span, .make-art-wait span, .idea-art i { animation: breathe 2s ease-in-out infinite; }
   .idea-art img { animation: none; }
-  .btn:active, .idea-body:active, .big-btn:active, .keep:active, .cam-shoot:active {
+  .btn:active, .idea-body:active, .keep:active, .cam-shoot:active, .shelf-item:active {
     transform: none;
   }
+  .big-btn:active, .big-btn.is-second:active { transform: rotate(0); }
   .pips i::after { transition: none; }
   .confetti { display: none; }
 }
@@ -788,6 +788,38 @@ img { max-width: 100%; }
 /* the reduced-motion stand-in for the tumbling block: it pulses, it does not move */
 @keyframes breathe { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 
+
+/* ---------- the home screen as a table top ----------
+ * A cutting mat, very faintly: the grid a craft table has under everything.
+ * Only here — once there is a photo, the page is about the photo. */
+main.is-table {
+  background:
+    linear-gradient(#f7e6ef 1.5px, transparent 1.5px) 0 0 / 2rem 2rem,
+    linear-gradient(90deg, #f7e6ef 1.5px, transparent 1.5px) 0 0 / 2rem 2rem,
+    #fffbfd;
+}
+/* bits and bobs, lying where the heading leaves room for them */
+.hero { position: relative; }
+.bits {
+  position: absolute; right: 0; bottom: 1rem;
+  width: min(9.5rem, 46%); height: auto; pointer-events: none;
+}
+
+/* a few of the ones you kept, under the camera frame */
+.home-shelf { margin-top: 1.4rem; }
+.home-shelf .label { margin-top: 0; }
+.home-shelf h2 { margin: 0; font: inherit; letter-spacing: inherit; }
+.shelf-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.shelf-row li:nth-child(n + 4) { display: none; }
+.shelf-item { display: grid; gap: .4rem; width: 100%; text-align: left; transition: transform .1s var(--ease); }
+.shelf-item:active { transform: scale(.97); }
+.shelf-pic {
+  display: grid; place-items: center; overflow: hidden; aspect-ratio: 1;
+  border: 4px solid var(--magenta); border-radius: var(--r); background: var(--tint); color: var(--pink);
+}
+.shelf-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shelf-pic svg { width: 40%; height: 40%; }
+.shelf-name { font-weight: 700; font-size: .9rem; line-height: 1.25; }
 
 /* ---------- the home screen's own copy of the four steps ----------
  * Hidden on a phone, where the same steps are one tap away and the camera
@@ -819,11 +851,17 @@ img { max-width: 100%; }
   .hero p { font-size: 1.2rem; max-width: 36ch; }
   /* the steps are on the page already */
   .how-open { display: none; }
+  .bits { width: min(13rem, 34%); bottom: 1.2rem; }
+  .shelf-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+  .shelf-row li:nth-child(n + 4) { display: block; }
+  .home-shelf { margin-top: 2rem; }
 
   .table { padding: 1.4rem; border-width: 10px; }
   .big-pair { gap: 1.2rem; }
-  .big-btn { min-height: 17rem; gap: 1rem; }
-  .big-btn img { max-width: 10rem; border-radius: 18px; }
+  /* as tall as the screen can spare, so the frame and the steps under it
+     share one screen on a short tablet as well as a tall one */
+  .big-btn { min-height: clamp(11rem, 100dvh - 44rem, 17rem); gap: 1rem; }
+  .big-btn .big-art { max-width: clamp(7rem, 100dvh - 47rem, 12rem); }
   .big-btn span { font-size: 1.7rem; }
   .table-hint { font-size: 1rem; margin-top: 1.2rem; }
 
@@ -844,19 +882,23 @@ img { max-width: 100%; }
   .work-ideas { grid-area: ideas; }
   .work-stuff > .label:first-child { margin-top: .35rem; }
   .shot.is-done img { height: auto; aspect-ratio: 4 / 3; }
-  /* while it is still looking there is only the photo, so it takes the middle */
-  .work.is-looking { grid-template-columns: minmax(0, 34rem); grid-template-areas: "photo"; justify-content: center; }
+  /* while it is still looking, or when the photo came to nothing, there is
+     only the one thing on the page, so it takes the middle */
+  .work.is-alone { grid-template-columns: minmax(0, 34rem); grid-template-areas: "photo"; justify-content: center; }
 
-  .ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  /* ideas run down the page, each one a full-width row; the shelf of kept
+     crafts is a grid, because those cards lead with their picture */
+  .ideas { gap: 1rem; }
+  .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* cards in a row stand the same height, with their buttons along the foot */
   .swipe-top, .idea { height: 100%; }
   .idea { grid-template-rows: 1fr auto; padding: 1.1rem 1.15rem; }
   .idea-body { align-content: start; }
   .idea-title { font-size: 1.3rem; }
-  /* with a card this wide the picture goes across the top */
-  .idea-body.has-art { grid-template-columns: minmax(0, 1fr); }
-  .idea-body.has-art > :not(.idea-art) { grid-column: 1; }
-  .idea-art { grid-row: auto; aspect-ratio: 16 / 10; margin-bottom: .4rem; }
+  /* the picture stays beside the words, only larger: across the top it made
+     each card so tall that two of the four ideas fell off the screen */
+  .idea-body.has-art { grid-template-columns: 8.5rem minmax(0, 1fr); column-gap: 1.1rem; }
+  .idea-art { border-radius: 14px; }
 
   /* one craft: the picture and what you need on the left, the steps on the right */
   .sheet-cols { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 1.6rem; align-items: start; }
@@ -904,13 +946,26 @@ img { max-width: 100%; }
 @media (min-width: 1000px) {
   .page { max-width: 74rem; }
   /* the heading shares the row now, so it comes down a size to stay on one line */
-  .hero h1 { font-size: 2.85rem; }
-  .big-btn { min-height: 14rem; }
+  .hero h1 { font-size: min(2.85rem, 4.3vw); }
+  /* a screen on its side is short: the buttons give up height before the
+     hint under them is pushed off the bottom */
+  .big-btn { min-height: clamp(8.5rem, 100dvh - 31rem, 15rem); }
+  .big-btn .big-art { max-width: clamp(5.5rem, 100dvh - 34rem, 11rem); }
   /* the picture is the reminder here, the steps are the content */
   .sheet-cols { grid-template-columns: 20rem minmax(0, 1fr); gap: 2rem; }
 
   /* camera frame on the left, the four steps down the right */
-  .home { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 3rem; align-items: start; }
+  .home { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1.4rem 3rem; align-items: start; align-content: start; }
+  /* the camera frame down the left; the shelf, then the steps, down the right */
+  .home-main { grid-column: 1; grid-row: 1 / span 2; }
+  .home-shelf, .home-how { grid-column: 2; }
+  .home-shelf { margin-top: .6rem; }
+  .home-shelf + .home-how { margin-top: 0; }
+  /* the heading shares its row with the bits, so the line under it stops short of them */
+  .hero p { max-width: calc(100% - 9.5rem); }
+  .bits { width: 8.5rem; }
+  /* both labels take two lines' room, so one wrapping does not leave the pair lopsided */
+  .big-btn span { min-height: 2.3em; display: grid; align-content: center; }
   .home-how { margin-top: .6rem; padding: 1.5rem; border-radius: var(--r-lg); background: var(--tint); }
   .home-how .how-steps { grid-template-columns: 1fr; gap: 1.1rem; }
   .home-how .how-steps li { grid-template-columns: 6rem 1fr; gap: 1rem; align-items: center; }
@@ -918,7 +973,7 @@ img { max-width: 100%; }
 
   /* photo and stickers down the left, ideas filling the right */
   .work {
-    grid-template-columns: 21rem minmax(0, 1fr); gap: 0 2.5rem;
+    grid-template-columns: 19rem minmax(0, 1fr); gap: 0 2.5rem;
     grid-template-areas: "photo ideas" "stuff ideas"; grid-template-rows: auto 1fr;
   }
   .work-stuff > .label:first-child { margin-top: 1.6rem; }
@@ -936,4 +991,29 @@ img { max-width: 100%; }
   }
   .make-art { margin: 0; }
   .make-foot { max-width: 80rem; }
+}
+
+/* A short, wide window — a tablet on its side, a laptop with the browser's
+   bars showing. Things that are tall for the sake of it give some back. */
+@media (min-width: 1000px) and (max-height: 840px) {
+  .home-how { padding: 1.1rem 1.3rem; }
+  .home-how h2 { margin-bottom: .7rem; font-size: 1.15rem; }
+  .home-how .how-steps { gap: .75rem; }
+  .home-how .how-steps li { grid-template-columns: 4.6rem 1fr; }
+  .home-how .how-mark { width: 4.6rem; height: 4.6rem; }
+  /* the sheet's picture is a reminder; cropped, the summary under it stays in view */
+  .sheet-cols { grid-template-columns: 17rem minmax(0, 1fr); }
+  .craft-art img, .craft-art-wait { aspect-ratio: 4 / 3; }
+}
+
+/* Room for the ideas two across, beside the photo. */
+@media (min-width: 1280px) {
+  .work { grid-template-columns: 21rem minmax(0, 1fr); }
+  .work-ideas .ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* A big monitor. Everything is set in rem, so the whole app steps up a size
+   instead of sitting small in the middle of the glass. */
+@media (min-width: 1600px) and (min-height: 950px) {
+  html { font-size: 131.25%; }
 }

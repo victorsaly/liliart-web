@@ -63,6 +63,13 @@ export function explain(err: unknown, fallback: string): string {
   return err instanceof AiError ? err.message : fallback
 }
 
+/** The worker writes its reasons in lower case; on screen they are sentences. */
+function sentence(reason: unknown): string | undefined {
+  if (typeof reason !== 'string' || !reason.trim()) return undefined
+  const text = reason.trim()
+  return text[0].toUpperCase() + text.slice(1) + (/[.!?…]$/.test(text) ? '' : '.')
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   let res: Response
   try {
@@ -75,7 +82,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     throw new AiError("Couldn't reach the internet. Have a look at the wifi and try again.")
   }
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new AiError(data?.error ?? 'That did not work. Try again in a moment.')
+  if (!res.ok) throw new AiError(sentence(data?.error) ?? 'That did not work. Try again in a moment.')
   return data as T
 }
 

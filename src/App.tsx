@@ -8,6 +8,7 @@ import { Kept } from './components/Kept'
 import { HowItWorks, HowSteps, markSeenHow, seenHow } from './components/HowItWorks'
 import { Shout } from './components/Shout'
 import { GrownUps } from './components/GrownUps'
+import { Bits } from './components/HomeArt'
 import { ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
 import { drawIdea, explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
@@ -68,6 +69,19 @@ export default function App() {
   /* the window no longer scrolls — main does, so that is what we rewind */
   const scroller = useRef<HTMLElement>(null)
   const top = () => scroller.current?.scrollTo({ top: 0 })
+  const ideasBox = useRef<HTMLDivElement>(null)
+
+  /*
+   * On a phone the ideas land below everything it spotted, a screen further
+   * down, and a child who does not scroll never learns they arrived. So when
+   * they do, bring them into view. Wider screens show them beside the photo
+   * and need no help.
+   */
+  useEffect(() => {
+    if (ideasState !== 'ready' || !window.matchMedia('(max-width: 699px)').matches) return
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ideasBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' })
+  }, [ideasState])
 
   const kept = useSyncExternalStore(saved.subscribe, saved.all, () => [])
   const keptCount = useSyncExternalStore(saved.subscribe, saved.count, () => 0)
@@ -210,7 +224,8 @@ export default function App() {
     <div className="app">
       <Header onHome={() => { startOver(); setTab('table') }} onGrownUps={() => setGrownUps(true)} />
 
-      <main ref={scroller}>
+      {/* the home screen is the table itself, so it gets the table's surface */}
+      <main ref={scroller} className={tab === 'table' && !photo ? 'is-table' : undefined}>
         <div className="page">
           {tab === 'table' && (!photo ? (
             <div className="home">
@@ -222,6 +237,7 @@ export default function App() {
                   <button type="button" className="btn btn-small how-open" onClick={() => setHow(true)}>
                     How it works
                   </button>
+                  <Bits />
                 </section>
 
                 {online ? <PhotoStep onPhoto={onPhoto} /> : (
@@ -241,6 +257,38 @@ export default function App() {
                 )}
               </div>
 
+              {/*
+                * What you made before, one tap from making it again. On a
+                * second visit this is the most interesting thing the app has,
+                * and it used to be hidden behind a tab while the screen under
+                * the camera frame sat empty.
+                */}
+              {kept.length > 0 && (
+                <section className="home-shelf" aria-labelledby="home-shelf-title">
+                  <div className="label">
+                    <h2 id="home-shelf-title">From your shelf</h2>
+                    <button type="button" className="btn btn-small" onClick={() => { setTab('kept'); top() }}>
+                      See all {keptCount}
+                    </button>
+                  </div>
+                  <ul className="shelf-row">
+                    {kept.slice(0, 4).map((craft) => {
+                      const picture = craft.made ?? craft.drawing
+                      return (
+                        <li key={craft.id}>
+                          <button type="button" className="shelf-item" onClick={() => setMaking(craft)}>
+                            <span className="shelf-pic">
+                              {picture ? <img src={picture} alt="" /> : <StarIcon filled />}
+                            </span>
+                            <span className="shelf-name">{craft.title}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </section>
+              )}
+
               {/* only where there is room for it: see .home-how */}
               <aside className="home-how" aria-labelledby="home-how-title">
                 <h2 id="home-how-title">How it works</h2>
@@ -252,7 +300,7 @@ export default function App() {
              * Three areas — the photo, what it spotted, the ideas — so a wide
              * screen can lay them side by side instead of in one thin column.
              */
-            <div className={`work ${looking ? 'is-looking' : ''}`}>
+            <div className={`work ${looking || materials.length === 0 ? 'is-alone' : ''}`}>
               <div className="work-photo">
                 <div className="label" style={{ marginTop: 0 }}>
                   <span>On the table</span>
@@ -262,8 +310,12 @@ export default function App() {
                 {looking ? (
                   <PhotoStep onPhoto={onPhoto} looking={looking} />
                 ) : problem && materials.length === 0 ? (
-                  /* nothing came of that photo, so the way to take another is right here */
-                  <PhotoStep onPhoto={onPhoto} />
+                  /* nothing came of that photo: say why first, with the way to
+                     take another straight under it */
+                  <>
+                    <p className="note err" role="alert" style={{ margin: '0 0 1rem' }}>{problem}</p>
+                    <PhotoStep onPhoto={onPhoto} />
+                  </>
                 ) : (
                   /* the photo stays in view: it is what the list below is a list of */
                   <figure className="shot is-done" style={{ margin: 0 }}>
@@ -275,7 +327,9 @@ export default function App() {
               {!looking && (
                 <>
                   <div className="work-stuff">
-                    {problem && <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>}
+                    {problem && materials.length > 0 && (
+                      <p className="note err" style={{ marginTop: '1rem' }}>{problem}</p>
+                    )}
 
                     {materials.length > 0 && (
                       <>
@@ -296,7 +350,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="work-ideas">
+                  <div className="work-ideas" ref={ideasBox}>
                     <Ideas
                       ideas={ideas}
                       state={ideasState}
