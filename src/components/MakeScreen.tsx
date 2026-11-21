@@ -4,6 +4,7 @@ import { shrink, toDataUrl } from '../lib/photo'
 import * as saved from '../lib/saved'
 import { keepPlace, placeIn } from '../lib/place'
 import { useSpeak } from '../lib/speak'
+import { usePicturesNote } from '../lib/usePicturesNote'
 import { Shout } from './Shout'
 import { TakePhoto } from './TakePhoto'
 import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GrownUpIcon, PictureIcon, RosetteIcon, SpeakerIcon } from './icons'
@@ -29,6 +30,7 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
   const [noArt, setNoArt] = useState<Record<number, boolean>>({})
   const [again, setAgain] = useState(0)
   const { can: canSpeak, speaking, say, hush } = useSpeak()
+  const picturesNote = usePicturesNote()
   const step = craft.steps[at]
   const last = at === craft.steps.length - 1
 
@@ -118,6 +120,10 @@ export function MakeScreen({ craft, onDone, onBack }: Props) {
               ? <img src={art[at]} alt={`Someone doing this step: ${step.title}`} />
               : <div className="make-art-wait"><span /><p>Drawing this step…</p></div>}
           </figure>
+        )}
+        {/* no frame, and a limit is why: say so once, quietly, and carry on */}
+        {!art[at] && noArt[at] && picturesNote && (
+          <p className="note no-pictures">{picturesNote} The steps still work.</p>
         )}
 
         <div className="make-words">

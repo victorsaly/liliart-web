@@ -460,6 +460,9 @@ img { max-width: 100%; }
 }
 .craft-art-wait { aspect-ratio: 1; display: grid; place-content: center; justify-items: center; gap: .9rem; }
 .craft-art-wait p { margin: 0; font-size: .92rem; font-weight: 700; color: #8c0a66; }
+/* no picture today: the frame says so in a line instead of holding a square open */
+.craft-art-wait.is-off { aspect-ratio: auto; padding: 1.4rem 1.1rem; text-align: center; }
+.no-pictures { margin: 0 0 .8rem; }
 .craft-art-wait span {
   width: 2.4rem; height: 2.4rem; border-radius: 8px;
   background: var(--pink); animation: tumble 1.5s var(--ease-swing) infinite;

@@ -305,8 +305,18 @@ async function route(request, env, url) {
       multipart: { body: packed.body, contentType: packed.headers.get("content-type") },
     }).catch((error) => {
       console.error("liliart-api picture", error?.message ?? error);
-      return null;
+      /* Workers AI has a daily allowance for the whole account. When it is
+         spent, say that: trying again will not help, and the app can tell the
+         child the pictures are done for today instead of drawing nothing. */
+      const spent = /daily free allocation|4006/i.test(String(error?.message ?? error));
+      return { spent };
     });
+    if (drawn?.spent) {
+      return json(
+        { error: "that's all the pictures for today — they start again tomorrow" },
+        { status: 429 },
+      );
+    }
     if (!drawn?.image) return json({ error: "could not draw it" }, { status: 502 });
     /* it answers in base64 — hand it over as a data URL so the browser has
        nothing else to fetch */
