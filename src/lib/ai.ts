@@ -3,6 +3,9 @@
  * the OpenAI key stays there and never reaches the browser.
  */
 
+import { shrink } from './photo'
+import { recall, remember } from './store'
+
 const API = import.meta.env.VITE_LILIART_API ?? 'https://liliart-api.still-union-ef8a.workers.dev'
 
 export interface Material {
@@ -129,6 +132,22 @@ async function picture(body: unknown): Promise<string | null> {
   }
 }
 
+/**
+ * A picture that is drawn once and then kept on the device. Looked for there
+ * first; drawn only if it is not; and put away, shrunk, when it arrives. The
+ * shrinking matters: these come back at a megabyte or so, and a tablet's
+ * worth of pixels is a twentieth of that.
+ */
+async function kept(key: string, body: unknown): Promise<string | null> {
+  const have = await recall<string>(key)
+  if (have) return have
+  const image = await picture(body)
+  if (!image) return null
+  const small = await shrink(image, 768, 0.8).catch(() => image)
+  void remember(key, small)
+  return small
+}
+
 export async function isReady(): Promise<boolean> {
   try {
     const res = await fetch(`${API}/v1/ai`, { cache: 'no-store' })
@@ -160,10 +179,27 @@ export async function suggestIdeas(materials: Material[]): Promise<Idea[]> {
 }
 
 export async function openCraft(idea: Idea, materials: Material[]): Promise<Craft> {
-  const body = { title: idea.title, blurb: idea.blurb, materials }
-  const craft = await post<Omit<Craft, 'id' | 'title'>>('/v1/ai/craft', body)
-  return { ...craft, id: idea.id, title: idea.title }
+  /* written out once, ever: an idea opened again after a reload reads the
+     same steps it did before, and nobody is asked to write them twice */
+  const asked = writing.get(idea.id)
+  if (asked) return asked
+  const wanted = (async () => {
+    const have = await recall<Craft>(`sheet:${idea.id}`)
+    if (have) return have
+    const body = { title: idea.title, blurb: idea.blurb, materials }
+    const written = await post<Omit<Craft, 'id' | 'title'>>('/v1/ai/craft', body)
+    const craft = { ...written, id: idea.id, title: idea.title }
+    void remember(`sheet:${idea.id}`, craft)
+    return craft
+  })()
+  writing.set(idea.id, wanted)
+  /* a failure is forgotten, so that it can be asked for again */
+  wanted.catch(() => writing.delete(idea.id))
+  return wanted
 }
+
+/** Crafts being written out right now, so two askers share the one request. */
+const writing = new Map<string, Promise<Craft>>()
 
 /**
  * Written out once per idea and held for the session, so keeping one from the
@@ -189,10 +225,10 @@ export async function drawCraft(craft: Craft, materials: Material[]): Promise<st
   /* the picture on the idea's card is the picture of this craft: the child
      chose it by looking at it, so the sheet shows the same one, and it is
      not paid for twice */
-  const onCard = await ideaArt.get(craft.id)
+  const onCard = (await ideaArt.get(craft.id)) ?? (await recall<string>(`idea:${craft.id}`))
   if (onCard) return onCard
   /* the craft is the point; a missing picture is not worth an error */
-  return picture({ what: craft.picture || `${craft.title}. ${craft.summary}`, materials })
+  return kept(`craft:${craft.id}`, { what: craft.picture || `${craft.title}. ${craft.summary}`, materials })
 }
 
 /**
@@ -206,7 +242,7 @@ const ideaArt = new Map<string, Promise<string | null>>()
 export function drawIdea(idea: Idea): Promise<string | null> {
   const have = ideaArt.get(idea.id)
   if (have) return have
-  const wanted = picture({
+  const wanted = kept(`idea:${idea.id}`, {
     what: `${idea.title}. ${idea.blurb}`,
     materials: idea.uses.map((name) => ({ name })),
   }).then((image) => {
@@ -220,10 +256,10 @@ export function drawIdea(idea: Idea): Promise<string | null> {
 /**
  * A picture of one step being done.
  *
- * Held for the session and no longer: six of these is a third of a megabyte,
- * which is not something to put in local storage next to the crafts people
- * actually want kept. Two callers asking for the same step share one request,
- * because the screen asks for the step you are on and the one after it.
+ * Kept on the device once drawn, so a craft opened again next week shows the
+ * same pictures without paying for them twice. Two callers asking for the same
+ * step share one request, because the screen asks for the step you are on and
+ * the one after it.
  */
 const stepArt = new Map<string, Promise<string | null>>()
 
@@ -235,7 +271,7 @@ export function drawStep(craft: Craft, n: number, materials: Material[]): Promis
   const step = craft.steps[n]
   if (!step) return Promise.resolve(null)
 
-  const wanted = picture({
+  const wanted = kept(`step:${craft.id}:${n}`, {
     kind: 'step',
     of: craft.title,
     what: `${step.title}. ${step.description}`,

@@ -29,3 +29,6 @@ worker/.wrangler/
 # local env
 .env
 .env.local
+
+# the worker's secrets for local runs
+.dev.vars

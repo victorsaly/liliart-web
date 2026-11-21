@@ -3,14 +3,12 @@
  *
  * The OpenAI key lives here and only here. The browser never sees it, which is
  * the whole reason this worker exists — a key compiled into a public bundle is
- * a key anyone can spend. The words come from OpenAI; the pictures are drawn
- * on Workers AI, which needs no key at all.
+ * a key anyone can spend. The words and the pictures both come from OpenAI.
  *
- * Three calls, matching the three things the app asks:
  *   POST /v1/ai/materials  a photo  -> what craft materials are in it
  *   POST /v1/ai/ideas      materials -> a few things a child could make
  *   POST /v1/ai/craft      one idea  -> tools, steps, how long it takes
- *   POST /v1/ai/picture    a craft   -> a drawing of the finished thing
+ *   POST /v1/ai/picture    a craft   -> a picture of it, or of one step
  *
  * Every call is metered per day, per signed-out address, so a passer-by who
  * finds the endpoint cannot run up the bill.
@@ -34,24 +32,30 @@ const CORS = (origin, allowed) => ({
 
 const now = () => Math.floor(Date.now() / 1000);
 const OPENAI = "https://api.openai.com/v1";
-const MODEL = "gpt-4o-mini";
-const IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
+/* Reads photos and writes. Tried against gpt-4o-mini on the same photos: it
+   counted better, answered in half the time and cost about half as much. It
+   can reason before answering, which these short asks do not need. */
+const MODEL = "gpt-6-luna";
+/* The picture model. About 1.7 cents a picture at this size and quality,
+   which is why a picture counts for so much against the daily cap below. */
+const IMAGE_MODEL = "gpt-image-2.6-flare";
 /*
  * The daily ceiling, in units rather than calls: it is here so a leaked
  * endpoint cannot drain the key overnight, not to ration a family. One
  * household shares one address, so a parent and a child both making things
  * count against the same number — hence the room.
  *
- * A drawing costs about twice what a text call does now that it is made on
- * Workers AI, so it counts double. A whole craft — photo, ideas, the steps,
- * the finished picture and six step pictures — is about seventeen units.
+ * A picture costs nearly a hundred times what a text call does, so it is
+ * weighed accordingly. A whole craft — photo, ideas, the steps, four idea
+ * pictures and six step pictures — is about forty-three units, so the cap is
+ * five or so crafts a day and about a dollar of pictures per address.
  */
 const DAILY = 240;
 const COST = {
   "/v1/ai/materials": 1,
   "/v1/ai/ideas": 1,
   "/v1/ai/craft": 1,
-  "/v1/ai/picture": 2,
+  "/v1/ai/picture": 4,
 };
 
 const str = (v, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -85,7 +89,18 @@ const SAFETY =
   "no bleach or solvents, no power tools, nothing that needs a craft knife without saying an adult cuts. " +
   "Where a step needs scissors, a hot glue gun or anything sharp or hot, say plainly that a grown-up does that part. " +
   "Never suggest anything that involves eating what is made unless it is plainly food. " +
-  "Use short, plain sentences a seven-year-old can read. No brand names.";
+  "Use short, plain sentences a seven-year-old can read. No brand names. " +
+  "Use British English words: yoghurt pot, lolly stick, clothes peg, sticky tape.";
+
+/**
+ * Things that are never craft materials, whatever the model thinks it saw.
+ *
+ * The prompt asks for these to be left out and the model mostly obliges, but
+ * in testing a box of matches on a kitchen counter came back as "matchbox"
+ * twice running. A child's safety should not rest on a model following an
+ * instruction, so anything matching this is dropped before it reaches the app.
+ */
+const NEVER = /match|lighter|candle|kni(fe|ves)|blade|razor|scissor|cutter|needle|\bpins?\b|glass|batter(y|ies)|bleach|cleaner|detergent|medicine|pill|tablet|syringe|chopping board|\bmug\b|\bkeys?\b|phone|wallet|purse|\bcoins?\b|money|charger|cable/i;
 
 let usageReady = false;
 async function spend(request, env, cost = 1) {
@@ -103,6 +118,17 @@ async function spend(request, env, cost = 1) {
   return row?.count ?? cost;
 }
 
+/** Why OpenAI said no, for the log: the worker hides it from the browser, and
+ *  without this a spent balance and a busy model look the same from outside. */
+async function refusal(response) {
+  const body = await response.json().catch(() => null);
+  return body?.error?.code ?? body?.error?.type ?? `http ${response.status}`;
+}
+
+/**
+ * Ask the model for one JSON object. `user` is a string, or the parts of a
+ * message when there is a photo to go with the words.
+ */
 async function chatJSON(env, system, user, maxTokens) {
   const response = await fetch(`${OPENAI}/chat/completions`, {
     method: "POST",
@@ -110,16 +136,23 @@ async function chatJSON(env, system, user, maxTokens) {
     body: JSON.stringify({
       model: MODEL,
       response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: maxTokens,
+      reasoning_effort: "none",
+      max_completion_tokens: maxTokens,
       messages: [{ role: "system", content: `${SAFETY} ${system}` }, { role: "user", content: user }],
     }),
   }).catch(() => null);
 
   if (!response) return { error: json({ error: "could not reach the AI" }, { status: 502 }) };
-  if (response.status === 401) return { error: json({ error: "the AI key was refused" }, { status: 503 }) };
-  if (response.status === 429) return { error: json({ error: "the AI is busy — try again in a moment" }, { status: 429 }) };
-  if (!response.ok) return { error: json({ error: "the AI could not answer" }, { status: 502 }) };
+  if (!response.ok) {
+    const why = await refusal(response);
+    console.error("liliart-api text", response.status, why);
+    if (response.status === 401) return { error: json({ error: "the AI key was refused" }, { status: 503 }) };
+    if (why === "credit_balance_exhausted" || why === "insufficient_quota") {
+      return { error: json({ error: "the AI is having a rest — try again later" }, { status: 503 }) };
+    }
+    if (response.status === 429) return { error: json({ error: "the AI is busy — try again in a moment" }, { status: 429 }) };
+    return { error: json({ error: "the AI could not answer" }, { status: 502 }) };
+  }
 
   const data = await response.json().catch(() => null);
   const content = data?.choices?.[0]?.message?.content;
@@ -156,42 +189,38 @@ async function route(request, env, url) {
     if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) {
       return json({ error: "a photo is required" }, { status: 400 });
     }
-    const response = await fetch(`${OPENAI}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-        max_tokens: 500,
-        messages: [
-          { role: "system", content: `${SAFETY} You list the things in a photo that could be used to make something.` },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  "What is in this photo that we could make something out of? Be specific — " +
-                  '"cardboard tube", "blue bottle top", "brown paper bag" — and skip anything ' +
-                  "that is not really usable. Count them: give a number when you can see one " +
-                  '("3", "6"), and only fall back to words when you truly cannot ("a handful", ' +
-                  '"half a roll", "a whole bag"). How many there are decides what can be built, ' +
-                  "so it is worth being careful. Lowercase names. " +
-                  'Reply with JSON: {"materials":[{"name":"...","amount":"a few"}]}',
-              },
-              { type: "image_url", image_url: { url: image, detail: "low" } },
-            ],
-          },
-        ],
-      }),
-    }).catch(() => null);
-    if (!response?.ok) return json({ error: "could not read the photo" }, { status: 502 });
-    const data = await response.json().catch(() => null);
-    let parsed = null;
-    try { parsed = JSON.parse(data?.choices?.[0]?.message?.content ?? ""); } catch { /* handled below */ }
-    if (!parsed) return json({ error: "could not read the photo" }, { status: 502 });
-    return json({ materials: Array.isArray(parsed.materials) ? parsed.materials.slice(0, 20) : [] });
+    const { data, error } = await chatJSON(
+      env,
+      "You list the things in a photo that could be used to make something.",
+      [
+        {
+          type: "text",
+          text:
+            "What is in this photo that we could make something out of? Be specific — " +
+            '"cardboard tube", "blue bottle top", "brown paper bag" — and skip anything ' +
+            "that is not really usable. Leave out anything sharp, hot or that makes fire " +
+            "(knives, scissors, matches, lighters), anything holding medicine or cleaning liquid, " +
+            "and things someone is plainly using (a mug of tea, keys, a phone). " +
+            "Count them: give a number when you can see one " +
+            '("3", "6"), and only fall back to words when you truly cannot ("a handful", ' +
+            '"half a roll", "a whole bag"). How many there are decides what can be built, ' +
+            "so it is worth being careful. Lowercase names. " +
+            'Reply with JSON: {"materials":[{"name":"...","amount":"a few"}]}',
+        },
+        { type: "image_url", image_url: { url: image, detail: "low" } },
+      ],
+      500,
+    );
+    if (error) {
+      /* a photo it could not read is the likeliest reason, and the kindest to say */
+      return error.status === 502 ? json({ error: "could not read the photo" }, { status: 502 }) : error;
+    }
+    const found = Array.isArray(data.materials) ? data.materials : [];
+    return json({
+      materials: found
+        .filter((m) => m && typeof m.name === "string" && m.name.trim() && !NEVER.test(m.name))
+        .slice(0, 20),
+    });
   }
 
   /* ---------- 2. a few things we could make ---------- */
@@ -215,7 +244,13 @@ async function route(request, env, url) {
       900,
     );
     if (error) return error;
-    return json({ ideas: Array.isArray(data.ideas) ? data.ideas.slice(0, 6) : [] });
+    /* "uses" is meant to repeat our names exactly, but it sometimes comes back
+       with the amount still attached — "cardboard tube (3)" — so take that off */
+    const ideas = (Array.isArray(data.ideas) ? data.ideas : []).slice(0, 6).map((idea) => ({
+      ...idea,
+      uses: strs(idea?.uses, 20).map((name) => name.replace(/\s*\([^)]*\)\s*$/, "")),
+    }));
+    return json({ ideas });
   }
 
   /* ---------- 3. one idea, written out to make ---------- */
@@ -290,37 +325,42 @@ async function route(request, env, url) {
         "studio product. No people, no hands, no text, no labels, no watermark.";
 
     /*
-     * Drawn by FLUX.2 klein on Workers AI rather than by OpenAI: about a
-     * quarter of the price, and in a side-by-side on these prompts it was the
-     * one that looked made by a child. It only takes multipart input, even for
-     * a prompt alone, and a FormData has to pass through a Response to get its
-     * boundary written out.
+     * 4:3 and low quality: the least this model will draw, and the shape a
+     * step picture is shown in anyway. "complexity" is how much it plans
+     * before it draws, and one hand doing one thing needs very little.
      */
-    const form = new FormData();
-    form.append("prompt", prompt);
-    form.append("width", "1024");
-    form.append("height", "1024");
-    const packed = new Response(form);
-    const drawn = await env.AI.run(IMAGE_MODEL, {
-      multipart: { body: packed.body, contentType: packed.headers.get("content-type") },
-    }).catch((error) => {
-      console.error("liliart-api picture", error?.message ?? error);
-      /* Workers AI has a daily allowance for the whole account. When it is
-         spent, say that: trying again will not help, and the app can tell the
-         child the pictures are done for today instead of drawing nothing. */
-      const spent = /daily free allocation|4006/i.test(String(error?.message ?? error));
-      return { spent };
-    });
-    if (drawn?.spent) {
-      return json(
-        { error: "that's all the pictures for today — they start again tomorrow" },
-        { status: 429 },
-      );
+    const response = await fetch(`${OPENAI}/images/generations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: IMAGE_MODEL,
+        prompt,
+        n: 1,
+        size: "1024x768",
+        quality: "low",
+        complexity: "low",
+        output_format: "jpeg",
+      }),
+    }).catch(() => null);
+
+    if (!response) return json({ error: "could not draw it" }, { status: 502 });
+    if (!response.ok) {
+      const why = await refusal(response);
+      console.error("liliart-api picture", response.status, why);
+      /* 429 is what the app shows as a note, so both of these are 429s: there
+         will be no pictures for a while, and the child should be told so */
+      if (why === "credit_balance_exhausted" || why === "insufficient_quota") {
+        return json({ error: "no pictures just now — they will be back later" }, { status: 429 });
+      }
+      if (response.status === 429) return json({ error: "the drawing is busy — try again in a moment" }, { status: 429 });
+      return json({ error: "could not draw it" }, { status: 502 });
     }
-    if (!drawn?.image) return json({ error: "could not draw it" }, { status: 502 });
+    const data = await response.json().catch(() => null);
+    const drawn = data?.data?.[0]?.b64_json;
+    if (!drawn) return json({ error: "could not draw it" }, { status: 502 });
     /* it answers in base64 — hand it over as a data URL so the browser has
        nothing else to fetch */
-    return json({ image: `data:image/jpeg;base64,${drawn.image}` });
+    return json({ image: `data:image/jpeg;base64,${drawn}` });
   }
 
   return json({ error: "not found" }, { status: 404 });

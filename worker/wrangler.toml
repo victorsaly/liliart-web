@@ -7,9 +7,6 @@ binding = "DB"
 database_name = "liliart"
 database_id = "5d033bf7-8156-4795-a9a6-a269dc92c863"
 
-[ai]
-binding = "AI"
-
 [vars]
 # The last two are where the native apps call from: iOS serves the app from
 # capacitor://localhost, Android from https://localhost.

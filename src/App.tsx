@@ -13,6 +13,7 @@ import { ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
 import { drawIdea, explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
 import { shrink } from './lib/photo'
+import { forget, forgetAllBut, recall, remember } from './lib/store'
 import './styles/make.css'
 
 /*
@@ -85,6 +86,29 @@ export default function App() {
 
   const kept = useSyncExternalStore(saved.subscribe, saved.all, () => [])
   const keptCount = useSyncExternalStore(saved.subscribe, saved.count, () => 0)
+
+  /*
+   * The table survives a reload. A photo, what it spotted and the ideas with
+   * their pictures are all things that were asked for and paid for; closing
+   * the app by accident should not mean asking for them again. Put back only
+   * if nothing has been started in the meantime.
+   */
+  useEffect(() => {
+    recall<{ photo: string; materials: Material[]; ideas: Idea[] }>('table').then((was) => {
+      if (!was?.photo || !was.ideas?.length || run.current !== 0) return
+      setPhoto(was.photo)
+      setMaterials(was.materials ?? [])
+      setIdeas(was.ideas)
+      setIdeasState('ready')
+    })
+  }, [])
+
+  useEffect(() => {
+    if (ideasState !== 'ready' || !photo) return
+    void remember('table', { photo, materials, ideas })
+    /* and let go of what belonged to ideas that are neither here nor kept */
+    void forgetAllBut([...ideas.map((i) => i.id), ...saved.all().map((c) => c.id)])
+  }, [ideasState, photo, materials, ideas])
 
   async function onPhoto(full: string, small: string) {
     const id = ++run.current
@@ -177,6 +201,7 @@ export default function App() {
     setIdeas([])
     setIdeasState('idle')
     setProblem(undefined)
+    void forget('table')
     top()
   }
 
