@@ -118,8 +118,10 @@ const NEVER = /match|lighter|candle|kni(fe|ves)|blade|razor|scissor|cutter|needl
 const FREE_SESSIONS = 3;
 const PER_SESSION = 16;
 /* how many brand-new devices one address can be given free sessions for in a
-   day, so that clearing storage is not a way to free pictures for ever */
-const NEW_DEVICES_A_DAY = 3;
+   day, so that clearing storage is not a way to free pictures for ever. Not
+   lower: a school or a mobile network puts many families behind one address,
+   and the daily cap per address already bounds what this can cost. */
+const NEW_DEVICES_A_DAY = 10;
 /* packs cannot be bought yet, so this does not promise that they can */
 const NO_SESSIONS = "the free pictures are used up";
 const ID = /^[A-Za-z0-9_-]{8,64}$/;

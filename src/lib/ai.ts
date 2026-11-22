@@ -163,8 +163,15 @@ export function watchPicturesNote(tell: () => void): () => void {
   return () => { noteWatchers.delete(tell) }
 }
 
+/** True once the worker has said this device has no picture sessions left. It
+ *  lasts until the app is opened again, which is when a new pack would show. */
+let noSessions = false
+
 /** Ask for one picture. Null when there is none, with the note set if a limit is why. */
 async function picture(body: unknown): Promise<string | null> {
+  /* told once that there are no sessions left, it stops asking: every card
+     and every step would only be told the same thing again */
+  if (noSessions) return null
   try {
     const { image } = await post<{ image: string }>('/v1/ai/picture', body)
     if (image) setPicturesNote(undefined)
@@ -172,6 +179,7 @@ async function picture(body: unknown): Promise<string | null> {
   } catch (err) {
     /* a limit (429) or no picture sessions left (402): either way, say so */
     if (err instanceof AiError && (err.status === 429 || err.status === 402)) setPicturesNote(err.message)
+    if (err instanceof AiError && err.status === 402) noSessions = true
     return null
   }
 }
