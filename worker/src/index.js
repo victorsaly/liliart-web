@@ -37,26 +37,25 @@ const OPENAI = "https://api.openai.com/v1";
    can reason before answering, which these short asks do not need. */
 const MODEL = "gpt-6-luna";
 /* The picture model. About 1.7 cents a picture at this size and quality,
-   which is why a picture counts for so much against the daily cap below. */
+   which is why pictures have a daily ceiling of their own below. */
 const IMAGE_MODEL = "gpt-image-2.6-flare";
 /*
- * The daily ceiling, in units rather than calls: it is here so a leaked
- * endpoint cannot drain the key overnight, not to ration a family. One
- * household shares one address, so a parent and a child both making things
- * count against the same number — hence the room.
+ * Two daily ceilings per address, there so a leaked endpoint cannot drain the
+ * key overnight, not to ration a family. One household shares one address, and
+ * so do a school and a mobile network, hence the room.
  *
- * A picture costs nearly a hundred times what a text call does, so it is
- * weighed accordingly. A whole craft — photo, ideas, the steps, four idea
- * pictures and six step pictures — is about forty-three units, so the cap is
- * five or so crafts a day and about a dollar of pictures per address.
+ * Words and pictures are counted apart. They used to share one number, with a
+ * picture weighing four, and the words ran out with the pictures: a family
+ * that had used its pictures could not even read a photo. A text call costs a
+ * fiftieth of a cent, so there is plenty of it. A picture costs about 1.7
+ * cents, so 120 of them is about two dollars, the most one address can cost
+ * in a day. That is seven or more crafts with every picture drawn.
+ *
+ * Pictures are also counted in sessions per device, further down. That is
+ * what a family meets in normal use; this is the backstop behind it.
  */
-const DAILY = 240;
-const COST = {
-  "/v1/ai/materials": 1,
-  "/v1/ai/ideas": 1,
-  "/v1/ai/craft": 1,
-  "/v1/ai/picture": 4,
-};
+const TEXT_A_DAY = 300;
+const PICTURES_A_DAY = 120;
 
 const str = (v, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const strs = (v, max = 40) => (Array.isArray(v) ? v.map((x) => str(x, 120)).filter(Boolean).slice(0, max) : []);
@@ -197,19 +196,30 @@ async function admit(env, request, device, session) {
 }
 
 let usageReady = false;
-async function spend(request, env, cost = 1) {
-  if (!usageReady) {
-    await env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS usage (key TEXT PRIMARY KEY, count INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
-    ).run();
-    usageReady = true;
-  }
-  const who = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const key = `${who}:${new Date().toISOString().slice(0, 10)}`;
+async function usage(env) {
+  if (usageReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS usage (key TEXT PRIMARY KEY, count INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+  ).run();
+  usageReady = true;
+}
+/** Today's count for this address: "text" or "pic". */
+const today = (request, kind) =>
+  `${kind === "pic" ? "pic:" : ""}${request.headers.get("cf-connecting-ip") ?? "unknown"}:${new Date().toISOString().slice(0, 10)}`;
+
+/** Count one, and say what the count now is. */
+async function spend(request, env, kind) {
+  await usage(env);
   const row = await env.DB.prepare(
-    "INSERT INTO usage (key, count, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET count = count + excluded.count, updated_at = excluded.updated_at RETURNING count",
-  ).bind(key, cost, now()).first();
-  return row?.count ?? cost;
+    "INSERT INTO usage (key, count, updated_at) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at RETURNING count",
+  ).bind(today(request, kind), now()).first();
+  return row?.count ?? 1;
+}
+/** Look at the count without adding to it. */
+async function spentSoFar(request, env, kind) {
+  await usage(env);
+  const row = await env.DB.prepare("SELECT count FROM usage WHERE key = ?").bind(today(request, kind)).first();
+  return row?.count ?? 0;
 }
 
 /** Why OpenAI said no, for the log: the worker hides it from the browser, and
@@ -276,7 +286,9 @@ async function route(request, env, url) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return json({ error: "bad request" }, { status: 400 });
 
-  if (await spend(request, env, COST[pathname] ?? 1) > DAILY) {
+  /* pictures keep their own count, further down, once it is known that one
+     will actually be drawn */
+  if (pathname !== "/v1/ai/picture" && (await spend(request, env, "text")) > TEXT_A_DAY) {
     return json(
       { error: "that's today's limit for this home — it starts again at midnight" },
       { status: 429 },
@@ -399,12 +411,22 @@ async function route(request, env, url) {
     const what = str(body.what, 300);
     if (!what) return json({ error: "nothing to draw" }, { status: 400 });
 
+    /* The address's ceiling is looked at first and only added to at the end.
+       Added to first, a device with no sessions left would use up the pictures
+       of everyone else behind the same address just by asking. */
+    if ((await spentSoFar(request, env, "pic")) >= PICTURES_A_DAY) {
+      return json(
+        { error: "that's all the pictures for this home today — they start again at midnight" },
+        { status: 429 },
+      );
+    }
     /* 402: there is nothing wrong, there is just nothing left to draw with */
     const device = request.headers.get("x-device") ?? "";
     const session = typeof body.session === "string" ? body.session : "";
     if (!ID.test(device) || !ID.test(session) || !(await admit(env, request, device, session))) {
       return json({ error: NO_SESSIONS, code: "no_sessions" }, { status: 402 });
     }
+    await spend(request, env, "pic");
     /* for running the counting above without paying for a picture each time */
     if (env.FAKE_PICTURES) {
       return json({ image: "data:image/gif;base64,R0lGODlhAQABAIAAAN1PlwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" });
