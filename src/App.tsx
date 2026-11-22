@@ -11,7 +11,7 @@ import { GrownUps } from './components/GrownUps'
 import { Bits } from './components/HomeArt'
 import { ScissorsIcon, StarIcon } from './components/icons'
 import * as saved from './lib/saved'
-import { drawIdea, explain, findMaterials, openCraftOnce, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
+import { drawIdea, explain, findMaterials, openCraftOnce, resumeSession, suggestIdeas, type Craft, type Idea, type Material } from './lib/ai'
 import { shrink } from './lib/photo'
 import { forget, forgetAllBut, recall, remember } from './lib/store'
 import './styles/make.css'
@@ -96,6 +96,8 @@ export default function App() {
   useEffect(() => {
     recall<{ photo: string; materials: Material[]; ideas: Idea[] }>('table').then((was) => {
       if (!was?.photo || !was.ideas?.length || run.current !== 0) return
+      /* "More ideas" after a reload is still the same photo, not a new session */
+      resumeSession(was.ideas[0].session)
       setPhoto(was.photo)
       setMaterials(was.materials ?? [])
       setIdeas(was.ideas)

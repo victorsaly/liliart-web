@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { picturesLeft } from '../lib/ai'
 import { ArrowLeftIcon } from './icons'
 
 const STORIES = 'https://victorsaly.github.io/LilianaBlog/'
@@ -13,6 +14,8 @@ const STORIES = 'https://victorsaly.github.io/LilianaBlog/'
  */
 export function GrownUps({ onClose }: { onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null)
+  const [left, setLeft] = useState<number>()
+  useEffect(() => { picturesLeft().then(setLeft) }, [])
 
   useEffect(() => {
     box.current?.focus()
@@ -49,11 +52,27 @@ export function GrownUps({ onClose }: { onClose: () => void }) {
         </section>
 
         <section className="sheet-block">
+          <h3>Pictures</h3>
+          <p>
+            The ideas, the steps and reading aloud are free. Pictures cost us money to make, so
+            they come in sessions: one photo of the table, with pictures for its ideas and for
+            each step of what you make from it. Every device starts with three free sessions.
+            {typeof left === 'number' && (
+              <> <b>This device has {left === 0 ? 'none' : left} left.</b></>
+            )}
+            {' '}Packs of more sessions are coming to the app. Until then, crafts work without
+            pictures once the free ones are used.
+          </p>
+        </section>
+
+        <section className="sheet-block">
           <h3>What stays on this device</h3>
           <p>
             Kept crafts, and photos of what your child made, are stored on this device only. There
             are no accounts, no adverts and no analytics. To stop misuse, our server counts how
-            many requests come from each internet address per day.
+            many requests come from each internet address per day, and how many picture sessions
+            this device has used, against a random number the app makes up. It is not linked to
+            you.
           </p>
         </section>
 

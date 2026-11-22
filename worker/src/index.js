@@ -25,7 +25,7 @@ const origins = (env) => (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.tri
 const CORS = (origin, allowed) => ({
   "access-control-allow-origin": allowed.includes(origin) ? origin : allowed[0] ?? "",
   "access-control-allow-methods": "GET,POST,OPTIONS",
-  "access-control-allow-headers": "content-type",
+  "access-control-allow-headers": "content-type,x-device",
   "access-control-max-age": "86400",
   vary: "origin",
 });
@@ -102,6 +102,98 @@ const SAFETY =
  */
 const NEVER = /match|lighter|candle|kni(fe|ves)|blade|razor|scissor|cutter|needle|\bpins?\b|glass|batter(y|ies)|bleach|cleaner|detergent|medicine|pill|tablet|syringe|chopping board|\bmug\b|\bkeys?\b|phone|wallet|purse|\bcoins?\b|money|charger|cable/i;
 
+/*
+ * Pictures are what costs money, so pictures are what is counted.
+ *
+ * The words are free to everyone. Pictures come in "sessions": one photo of
+ * the table, the pictures on its idea cards, and the step pictures of whatever
+ * gets made from it. A new device is given a few sessions to see what the app
+ * can do; after that they come in packs, bought by a grown-up. A session is
+ * capped, so the worst a single one can cost is known.
+ *
+ * It is counted here, against an id the device makes up for itself, because a
+ * count kept only on the device is one anybody can reset. There are no
+ * accounts: the id says nothing about who holds it.
+ */
+const FREE_SESSIONS = 3;
+const PER_SESSION = 16;
+/* how many brand-new devices one address can be given free sessions for in a
+   day, so that clearing storage is not a way to free pictures for ever */
+const NEW_DEVICES_A_DAY = 3;
+/* packs cannot be bought yet, so this does not promise that they can */
+const NO_SESSIONS = "the free pictures are used up";
+const ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+let ledgerReady = false;
+async function ledger(env) {
+  if (ledgerReady) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, free INTEGER NOT NULL, paid INTEGER NOT NULL, created_at INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, device TEXT NOT NULL, pictures INTEGER NOT NULL, ok INTEGER NOT NULL, created_at INTEGER NOT NULL)"),
+  ]);
+  ledgerReady = true;
+}
+
+/** How many picture sessions a device has left. A device not seen before has its free ones. */
+async function sessionsLeft(env, device) {
+  await ledger(env);
+  const row = await env.DB.prepare("SELECT free, paid FROM devices WHERE id = ?").bind(device).first();
+  return row ? row.free + row.paid : FREE_SESSIONS;
+}
+
+/**
+ * May this device have one more picture in this session?
+ *
+ * The first picture of a session is the one that pays for it. Four idea
+ * pictures are asked for at once, so the session row is claimed first and
+ * only the request that claimed it spends anything; the others wait a moment
+ * for it to be marked good, rather than each paying, or each riding free.
+ */
+async function admit(env, request, device, session) {
+  await ledger(env);
+  const db = env.DB;
+  const claimed = await db.prepare(
+    "INSERT OR IGNORE INTO sessions (id, device, pictures, ok, created_at) VALUES (?, ?, 0, 0, ?)",
+  ).bind(session, device, now()).run();
+
+  if (claimed.meta.changes === 1) {
+    const fresh = await db.prepare(
+      "INSERT OR IGNORE INTO devices (id, free, paid, created_at) VALUES (?, ?, 0, ?)",
+    ).bind(device, FREE_SESSIONS, now()).run();
+    if (fresh.meta.changes === 1) {
+      const who = request.headers.get("cf-connecting-ip") ?? "unknown";
+      const key = `new:${who}:${new Date().toISOString().slice(0, 10)}`;
+      const seen = await db.prepare(
+        "INSERT INTO usage (key, count, updated_at) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at RETURNING count",
+      ).bind(key, now()).first();
+      if ((seen?.count ?? 1) > NEW_DEVICES_A_DAY) {
+        await db.prepare("UPDATE devices SET free = 0 WHERE id = ?").bind(device).run();
+      }
+    }
+    const paid =
+      (await db.prepare("UPDATE devices SET free = free - 1 WHERE id = ? AND free > 0 RETURNING free").bind(device).first()) ??
+      (await db.prepare("UPDATE devices SET paid = paid - 1 WHERE id = ? AND paid > 0 RETURNING paid").bind(device).first());
+    if (!paid) {
+      await db.prepare("DELETE FROM sessions WHERE id = ? AND ok = 0").bind(session).run();
+      return false;
+    }
+    await db.prepare("UPDATE sessions SET ok = 1 WHERE id = ?").bind(session).run();
+  }
+
+  for (let tries = 0; tries < 6; tries++) {
+    const room = await db.prepare(
+      "UPDATE sessions SET pictures = pictures + 1 WHERE id = ? AND device = ? AND ok = 1 AND pictures < ? RETURNING pictures",
+    ).bind(session, device, PER_SESSION).first();
+    if (room) return true;
+    const there = await db.prepare("SELECT ok FROM sessions WHERE id = ? AND device = ?").bind(session, device).first();
+    /* gone (nothing to pay with), full, or somebody else's: no. Still being
+       paid for by the request that claimed it: wait and look again. */
+    if (!there || there.ok === 1) return false;
+    await new Promise((done) => setTimeout(done, 150));
+  }
+  return false;
+}
+
 let usageReady = false;
 async function spend(request, env, cost = 1) {
   if (!usageReady) {
@@ -169,6 +261,12 @@ async function route(request, env, url) {
 
   if (request.method === "GET" && pathname === "/v1/ai") {
     return json({ ready: Boolean(env.OPENAI_API_KEY) });
+  }
+  /* how many picture sessions this device has left, for the grown-ups' page */
+  if (request.method === "GET" && pathname === "/v1/pictures") {
+    const device = request.headers.get("x-device") ?? "";
+    if (!ID.test(device)) return json({ error: "bad request" }, { status: 400 });
+    return json({ left: await sessionsLeft(env, device), perSession: PER_SESSION });
   }
   if (request.method !== "POST") return json({ error: "not found" }, { status: 404 });
   if (!env.OPENAI_API_KEY) return json({ error: "the AI is not set up yet" }, { status: 503 });
@@ -298,6 +396,17 @@ async function route(request, env, url) {
   if (pathname === "/v1/ai/picture") {
     const what = str(body.what, 300);
     if (!what) return json({ error: "nothing to draw" }, { status: 400 });
+
+    /* 402: there is nothing wrong, there is just nothing left to draw with */
+    const device = request.headers.get("x-device") ?? "";
+    const session = typeof body.session === "string" ? body.session : "";
+    if (!ID.test(device) || !ID.test(session) || !(await admit(env, request, device, session))) {
+      return json({ error: NO_SESSIONS, code: "no_sessions" }, { status: 402 });
+    }
+    /* for running the counting above without paying for a picture each time */
+    if (env.FAKE_PICTURES) {
+      return json({ image: "data:image/gif;base64,R0lGODlhAQABAIAAAN1PlwAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" });
+    }
     const made = describe(materialList(body.materials, 12));
 
     /*

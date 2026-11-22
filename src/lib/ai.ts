@@ -15,6 +15,8 @@ export interface Material {
 
 export interface Idea {
   id: string
+  /** the photo this came from: pictures are counted per photo, see `session` */
+  session?: string
   title: string
   blurb: string
   minutes: number
@@ -39,6 +41,8 @@ export interface Step {
 
 export interface Craft {
   id: string
+  /** carried over from the idea, so its step pictures belong to the same photo */
+  session?: string
   title: string
   summary: string
   minutes: number
@@ -69,6 +73,45 @@ export function explain(err: unknown, fallback: string): string {
   return err instanceof AiError ? err.message : fallback
 }
 
+/*
+ * Who is asking, and about which photo.
+ *
+ * Pictures are counted in sessions — one photo and what is made from it — and
+ * the worker keeps that count against an id this device makes up for itself.
+ * It is random, it is not tied to a person, and it never leaves the app
+ * except to the worker. If storage is blocked the id lasts for the visit.
+ */
+const DEVICE = 'liliart-device'
+const newId = (): string =>
+  (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`)
+let deviceId: string | undefined
+function device(): string {
+  if (deviceId) return deviceId
+  try {
+    deviceId = localStorage.getItem(DEVICE) ?? undefined
+    if (!deviceId) { deviceId = newId(); localStorage.setItem(DEVICE, deviceId) }
+  } catch {
+    deviceId = newId()
+  }
+  return deviceId
+}
+
+/** The photo on the table now. A new photo starts a new one. */
+let session = newId()
+/** After a reload: carry on with the photo that was on the table before. */
+export function resumeSession(was: string | undefined): void { if (was) session = was }
+
+/** How many picture sessions this device has left, or undefined if it cannot be asked. */
+export async function picturesLeft(): Promise<number | undefined> {
+  try {
+    const res = await fetch(`${API}/v1/pictures`, { headers: { 'x-device': device() }, cache: 'no-store' })
+    const left = res.ok ? (await res.json()).left : undefined
+    return typeof left === 'number' ? left : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The worker writes its reasons in lower case; on screen they are sentences. */
 function sentence(reason: unknown): string | undefined {
   if (typeof reason !== 'string' || !reason.trim()) return undefined
@@ -81,7 +124,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   try {
     res = await fetch(`${API}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-device': device() },
       body: JSON.stringify(body),
     })
   } catch {
@@ -127,7 +170,8 @@ async function picture(body: unknown): Promise<string | null> {
     if (image) setPicturesNote(undefined)
     return image ?? null
   } catch (err) {
-    if (err instanceof AiError && err.status === 429) setPicturesNote(err.message)
+    /* a limit (429) or no picture sessions left (402): either way, say so */
+    if (err instanceof AiError && (err.status === 429 || err.status === 402)) setPicturesNote(err.message)
     return null
   }
 }
@@ -159,6 +203,7 @@ export async function isReady(): Promise<boolean> {
 
 /** A photo in, a list of what we could use out. */
 export async function findMaterials(dataUrl: string): Promise<Material[]> {
+  session = newId()
   const { materials } = await post<{ materials: Material[] }>('/v1/ai/materials', { image: dataUrl })
   return (materials ?? [])
     .filter((m) => m && typeof m.name === 'string' && m.name.trim())
@@ -171,6 +216,7 @@ export async function suggestIdeas(materials: Material[]): Promise<Idea[]> {
   return (ideas ?? []).map((idea, n) => ({
     ...idea,
     id: `idea-${Date.now()}-${n}`,
+    session,
     minutes: Number(idea.minutes) || 30,
     uses: Array.isArray(idea.uses) ? idea.uses : [],
     alsoNeed: Array.isArray(idea.alsoNeed) ? idea.alsoNeed : [],
@@ -188,7 +234,7 @@ export async function openCraft(idea: Idea, materials: Material[]): Promise<Craf
     if (have) return have
     const body = { title: idea.title, blurb: idea.blurb, materials }
     const written = await post<Omit<Craft, 'id' | 'title'>>('/v1/ai/craft', body)
-    const craft = { ...written, id: idea.id, title: idea.title }
+    const craft = { ...written, id: idea.id, title: idea.title, session: idea.session }
     void remember(`sheet:${idea.id}`, craft)
     return craft
   })()
@@ -228,7 +274,11 @@ export async function drawCraft(craft: Craft, materials: Material[]): Promise<st
   const onCard = (await ideaArt.get(craft.id)) ?? (await recall<string>(`idea:${craft.id}`))
   if (onCard) return onCard
   /* the craft is the point; a missing picture is not worth an error */
-  return kept(`craft:${craft.id}`, { what: craft.picture || `${craft.title}. ${craft.summary}`, materials })
+  return kept(`craft:${craft.id}`, {
+    session: craft.session ?? craft.id,
+    what: craft.picture || `${craft.title}. ${craft.summary}`,
+    materials,
+  })
 }
 
 /**
@@ -243,6 +293,7 @@ export function drawIdea(idea: Idea): Promise<string | null> {
   const have = ideaArt.get(idea.id)
   if (have) return have
   const wanted = kept(`idea:${idea.id}`, {
+    session: idea.session ?? session,
     what: `${idea.title}. ${idea.blurb}`,
     materials: idea.uses.map((name) => ({ name })),
   }).then((image) => {
@@ -272,6 +323,8 @@ export function drawStep(craft: Craft, n: number, materials: Material[]): Promis
   if (!step) return Promise.resolve(null)
 
   const wanted = kept(`step:${craft.id}:${n}`, {
+    /* a craft kept before sessions existed stands as a session of its own */
+    session: craft.session ?? craft.id,
     kind: 'step',
     of: craft.title,
     what: `${step.title}. ${step.description}`,
